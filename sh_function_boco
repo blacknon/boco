@@ -1,0 +1,164 @@
+#!/bin/bash
+
+# @brief:
+#     boco
+function boco() {
+    # set shopt
+    shopt -s checkwinsize; (:;:)
+
+    # get data from stdin or file.
+    if [ -p /dev/stdin ];then
+        local DATA="$(</dev/stdin)"
+    else
+        local DATA="$(<$@)"
+    fi
+
+    # DATA to Array
+    local OLD_IFS=$IFS
+    local IFS=$'\n'
+    local ARRAY_DATA=($(echo "${DATA}"))
+    local ARRAY_DATA_COUNT=${#ARRAY_DATA[@]}
+    local IFS=${OLD_IFS}
+
+    # get cursor positon
+    local POS=($(__get_cursor_position))
+
+    # set view max line
+    local VIEW_MAX_LINE=${#ARRAY_DATA[@]}
+    if [[ $((${POS_ROW} - ${LINES})) -gt $VIEW_MAX_LINE ]];then
+        local VIEW_MAX_LINE=$((${POS_ROW} - ${LINES}))
+    fi
+
+    # echo ${VIEW_MAX_LINE}
+
+
+    # @brief: get cursor positon
+    # @return: $row $col
+    function __get_cursor_position() {
+        exec < /dev/tty
+        local OLD_STTY=$(stty -g)
+        stty raw -echo min 0
+
+        # get position data
+        echo -ne "\e[6n" > /dev/tty
+        IFS=';' read -r -d R -a POSITION
+        stty ${OLD_STTY}
+
+        # parse row and column
+        local POS_ROW=${POSITION[0]:2}
+        local POS_COL=${POSITION[1]}
+        echo ${POS_ROW} ${POS_COL}
+    }
+
+
+    # @brief: print data with ANSI escape code.
+    function __print_line_position() {
+        local NOW_POS_ROW="${1}"
+        local ADD_POS_ROW="${2}"
+        local PRINT_POS_ROW=$((${NOW_POS_ROW} + ${ADD_POS_ROW}))
+
+        # move cursor
+        echo -ne "\e["${PRINT_POS_ROW}";0H"
+
+        # print line
+        if [ ${3} -eq 0 ];then
+            printf "%s\n" "${4}" >&2
+        else
+            printf "\e[44m%s\e[0m\n" "${4}" >&2
+        fi
+    }
+
+    # @brief:
+    #     print data
+    function __print_data() {
+        local OLD_IFS=$IFS
+        local IFS=$'\n'
+        local ARRAY_DATA=($(echo "${2}"))
+        local ARRAY_DATA_COUNT=${#ARRAY_DATA[@]}
+        local IFS=${OLD_IFS}
+
+        echo "NOW_LINE: " "${NOW_LINE}"
+
+        # print line
+        for (( i = 0; i < ${ARRAY_DATA_COUNT}; i++ ));
+        do
+            if [ ${NOW_LINE} -eq ${i} ];then
+                __print_line_position "${POS[0]}" "$((${i}+1))" 1 "${ARRAY_DATA[${i}]}"
+            else
+                __print_line_position "${POS[0]}" "$((${i}+1))" 0 "${ARRAY_DATA[${i}]}"
+            fi
+        done
+    }
+
+    # @brief:
+    #     clear printed data
+    function __clear_print_data() {
+        echo -ne "\e["${POS[0]}";0H" # move cursor
+        echo $'\e[2K' $'\e[1A'
+        for ((i = 0; i < ${VIEW_MAX_LINE};i++));
+        do
+            echo $'\e[1B'
+            echo $'\e[1A' $'\e[1G' $'\e[2K' $'\e[1A'
+        done
+        echo -ne "\e["${POS[0]}";0H"
+    }
+
+    # set NOW_LINE, SELECTED_LINE
+    local NOW_LINE=0
+    local SELECTED_LINE=(0)
+
+    # set SEARCH_WORD
+    local SEARCH_WORD=""
+
+    # first print out
+    __print_data "${SEARCH_WORD}" "${DATA}"
+
+    while read -rsn1 INPUT_KEY </dev/tty
+    do
+        case "${INPUT_KEY}" in
+            # hundling escape
+            $'\x1b')
+            read -rsn1 -t 0.1 TMP_KEY </dev/tty
+            if [[ "${TMP_KEY}" == "[" ]]; then
+                read -rsn1 -t 0.1 TMP_KEY </dev/tty
+                case "${TMP_KEY}" in
+                    # up key
+                    "A")
+                        local NOW_LINE=$((${NOW_LINE} - 1))
+                        if [[ ${NOW_LINE} -le 0 ]];then
+                            local NOW_LINE=0
+                        fi
+                        __clear_print_data
+                        __print_data "${SEARCH_WORD}" "${DATA}"
+                        ;;
+
+                    # down key
+                    "B")
+                        local NOW_LINE=$((${NOW_LINE} + 1))
+                        if [[ ${NOW_LINE} -gt ${VIEW_MAX_LINE} ]];then
+                            local NOW_LINE=${VIEW_MAX_LINE}
+                        fi
+                        __clear_print_data
+                        __print_data "${SEARCH_WORD}" "${DATA}"
+                        ;;
+                esac
+            fi
+
+            # Flush "stdin" with 0.1  sec timeout.
+            read -rsn5 -t 0.1
+            ;;
+
+            # input Enter key
+            "")
+                __clear_print_data
+                echo "${ARRAY_DATA[${NOW_LINE}]}"
+                break
+                ;;
+
+            # *)
+            #     echo ${KEY}
+            #     ;;
+        esac
+    done
+
+}
