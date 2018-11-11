@@ -3,35 +3,6 @@
 # @brief:
 #     boco
 function boco() {
-    # set shopt
-    shopt -s checkwinsize; (:;:)
-
-    # get data from stdin or file.
-    if [ -p /dev/stdin ];then
-        local DATA="$(</dev/stdin)"
-    else
-        local DATA="$(<$@)"
-    fi
-
-    # DATA to Array
-    local OLD_IFS=$IFS
-    local IFS=$'\n'
-    local ARRAY_DATA=($(echo "${DATA}"))
-    local ARRAY_DATA_COUNT=${#ARRAY_DATA[@]}
-    local IFS=${OLD_IFS}
-
-    # get cursor positon
-    local POS=($(__get_cursor_position))
-
-    # set view max line
-    local VIEW_MAX_LINE=${#ARRAY_DATA[@]}
-    if [[ $((${POS_ROW} - ${LINES})) -gt $VIEW_MAX_LINE ]];then
-        local VIEW_MAX_LINE=$((${POS_ROW} - ${LINES}))
-    fi
-
-    # echo ${VIEW_MAX_LINE}
-
-
     # @brief: get cursor positon
     # @return: $row $col
     function __get_cursor_position() {
@@ -102,6 +73,33 @@ function boco() {
         done
         echo -ne "\e["${POS[0]}";0H"
     }
+
+    # set shopt
+    shopt -s checkwinsize; (:;:)
+
+    # get data from stdin or file.
+    if [ -p /dev/stdin ];then
+        local DATA="$(</dev/stdin)"
+    else
+        local DATA="$(<$@)"
+    fi
+
+    # DATA to Array
+    local OLD_IFS=$IFS
+    local IFS=$'\n'
+    local ARRAY_DATA=($(echo "${DATA}"))
+    local ARRAY_DATA_COUNT=${#ARRAY_DATA[@]}
+    local IFS=${OLD_IFS}
+
+    # get cursor positon
+    local POS=($(__get_cursor_position))
+
+    # set view max line
+    local VIEW_MAX_LINE=${#ARRAY_DATA[@]}
+    if [[ $((${POS_ROW} - ${LINES})) -gt $VIEW_MAX_LINE ]];then
+        local VIEW_MAX_LINE=$((${POS_ROW} - ${LINES}))
+    fi
+
 
     # set NOW_LINE, SELECTED_LINE
     local NOW_LINE=0
