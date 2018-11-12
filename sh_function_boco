@@ -48,7 +48,7 @@ function boco() {
         local ARRAY_DATA_COUNT=${#ARRAY_DATA[@]}
         local IFS=${OLD_IFS}
 
-        echo "NOW_LINE: " "${NOW_LINE}"
+        echo "NOW_LINE: " "${NOW_LINE}" >&2
 
         # print line
         for (( i = 0; i < ${ARRAY_DATA_COUNT}; i++ ));
@@ -64,14 +64,14 @@ function boco() {
     # @brief:
     #     clear printed data
     function __clear_print_data() {
-        echo -ne "\e["${POS[0]}";0H" # move cursor
-        echo $'\e[2K' $'\e[1A'
+        echo -ne "\e["${POS[0]}";0H" >&2 # move cursor
+        echo $'\e[2K' $'\e[1A' >&2
         for ((i = 0; i < ${VIEW_MAX_LINE};i++));
         do
-            echo $'\e[1B'
-            echo $'\e[1A' $'\e[1G' $'\e[2K' $'\e[1A'
+            echo $'\e[1B' >&2
+            echo $'\e[1A' $'\e[1G' $'\e[2K' $'\e[1A' >&2
         done
-        echo -ne "\e["${POS[0]}";0H"
+        echo -ne "\e["${POS[0]}";0H" >&2
     }
 
     # set shopt
@@ -133,8 +133,8 @@ function boco() {
                     # down key
                     "B")
                         local NOW_LINE=$((${NOW_LINE} + 1))
-                        if [[ ${NOW_LINE} -gt ${VIEW_MAX_LINE} ]];then
-                            local NOW_LINE=${VIEW_MAX_LINE}
+                        if [[ ${NOW_LINE} -gt $((${VIEW_MAX_LINE} - 1)) ]];then
+                            local NOW_LINE=$((${VIEW_MAX_LINE} - 1))
                         fi
                         __clear_print_data
                         __print_data "${SEARCH_WORD}" "${DATA}"
