@@ -1,5 +1,21 @@
 #!/bin/bash
 
+# @TODO:
+#    ・変数名の見直し！(他の言語と違って混ざりやすい。あまり良い状態とは言えないので。)
+#    ・DATAの行数が残りのターミナル行数より多い場合の処理について
+#    　・プロンプトが一番上の行にくるよう、出力行数を調整
+#    　・上下キーでスクロールさせるようにする(現状は２行前後ずれるため、原因究明して改修)
+#    ・カーソルのある行については、行全体の色を変化させるようにANSIカラーコードの出力を修正する
+#    ・出力行の検索、絞り込み機能の追加
+#    　・headerに機能をつける
+#    　・非正規表現での検索機能
+#    　・正規表現での検索機能
+#    　・Ctrl+Rで切り替えできるようにする
+#    ・複数行の選択機能(Tabキー？)
+#    ・zshでfunctionとして読み込んでも動作するようにする
+#    ・バッファを挟んで、リアルタイムで出力が追加されても対応できるようにする
+
+
 # @brief:
 #     boco
 function boco() {
@@ -22,7 +38,12 @@ function boco() {
     }
 
 
-    # @brief: print data with ANSI escape code.
+    # @brief: print data line with ANSI escape code.
+    #     __print_line_position
+    #          ${1} ... NOW_PROMPT_POSITION(LINE)
+    #          ${2} ... ADD_POSITION(LINE)
+    #          ${3} ... CURSOR_LINE_FLAG(0(true)|1(false))
+    #          ${4} ... DATA(LINE)
     function __print_line_position() {
         local NOW_POS_ROW="${1}"
         local ADD_POS_ROW="${2}"
@@ -35,23 +56,28 @@ function boco() {
         if [ ${3} -eq 0 ];then
             printf "%s\n" "${4}" >&2
         else
-            printf "\e[44m%s\e[0m\n" "${4}" >&2
+            printf "\e[44m%s\n\e[0m" "${4}" >&2
         fi
     }
 
     # @brief:
-    #     print data
+    #     __print_data
+    #          ${1} ... SEARCH_WORD
+    #          ${2} ... VIEW_MAX_LINE
+    #          ${3} ... DATA
     function __print_data() {
-        local OLD_IFS=$IFS
+        # DATA to Array
+        local OLD_IFS=${IFS}
         local IFS=$'\n'
-        local ARRAY_DATA=($(echo "${2}"))
+        local ARRAY_DATA=($(echo "${3}"))
         local ARRAY_DATA_COUNT=${#ARRAY_DATA[@]}
         local IFS=${OLD_IFS}
 
+        # print header
         echo "NOW_LINE: " "${NOW_LINE}" >&2
 
         # print line
-        for (( i = 0; i < ${ARRAY_DATA_COUNT}; i++ ));
+        for (( i = 0; i < "${2}"; i++ ));
         do
             if [ ${NOW_LINE} -eq ${i} ];then
                 __print_line_position "${POS[0]}" "$((${i}+1))" 1 "${ARRAY_DATA[${i}]}"
@@ -74,7 +100,7 @@ function boco() {
         echo -ne "\e["${POS[0]}";0H" >&2
     }
 
-    # set shopt
+    # set shopt(windows size)
     shopt -s checkwinsize; (:;:)
 
     # get data from stdin or file.
@@ -85,7 +111,7 @@ function boco() {
     fi
 
     # DATA to Array
-    local OLD_IFS=$IFS
+    local OLD_IFS=${IFS}
     local IFS=$'\n'
     local ARRAY_DATA=($(echo "${DATA}"))
     local ARRAY_DATA_COUNT=${#ARRAY_DATA[@]}
@@ -96,9 +122,10 @@ function boco() {
 
     # set view max line
     local VIEW_MAX_LINE=${#ARRAY_DATA[@]}
-    if [[ $((${POS_ROW} - ${LINES})) -gt $VIEW_MAX_LINE ]];then
-        local VIEW_MAX_LINE=$((${POS_ROW} - ${LINES}))
+    if [[ $((${LINES} - ${POS[0]})) -le $VIEW_MAX_LINE ]];then
+        local VIEW_MAX_LINE=$((${LINES} - ${POS[0]}))
     fi
+    # echo ${VIEW_MAX_LINE}
 
 
     # set NOW_LINE, SELECTED_LINE
@@ -109,10 +136,14 @@ function boco() {
     local SEARCH_WORD=""
 
     # first print out
-    __print_data "${SEARCH_WORD}" "${DATA}"
+    __print_data "${SEARCH_WORD}" "${VIEW_MAX_LINE}" "${DATA}"
 
-    while read -rsn1 INPUT_KEY </dev/tty
+    while true
     do
+        # get input key
+        # TODO: forking zsh/bash
+        read -rsn1 INPUT_KEY </dev/tty
+
         case "${INPUT_KEY}" in
             # hundling escape
             $'\x1b')
@@ -127,7 +158,7 @@ function boco() {
                             local NOW_LINE=0
                         fi
                         __clear_print_data
-                        __print_data "${SEARCH_WORD}" "${DATA}"
+                        __print_data "${SEARCH_WORD}" "${VIEW_MAX_LINE}" "${DATA}"
                         ;;
 
                     # down key
@@ -137,7 +168,7 @@ function boco() {
                             local NOW_LINE=$((${VIEW_MAX_LINE} - 1))
                         fi
                         __clear_print_data
-                        __print_data "${SEARCH_WORD}" "${DATA}"
+                        __print_data "${SEARCH_WORD}" "${VIEW_MAX_LINE}" "${DATA}"
                         ;;
                 esac
             fi
@@ -153,10 +184,13 @@ function boco() {
                 break
                 ;;
 
-            # *)
-            #     echo ${KEY}
-            #     ;;
+            *)
+                local SEARCH_WORD=${SEARCH_WORD}${INPUT_KEY}
+                ;;
         esac
     done
 
+    echo "POSITION_ROW:" ${POS[0]}
+    echo "POSITION:" ${LINES}
+    echo "VIEW_MAX_LINE:" ${VIEW_MAX_LINE}
 }
