@@ -70,6 +70,9 @@ function boco() {
   # env
   local -r OLD_IFS=${IFS}
 
+  # cmd
+  local CMD_GREP
+
   ## ----------
   # function
   ## ----------
@@ -125,7 +128,9 @@ function boco() {
     if [ "${CURSOR_LINE_FLAG}" -eq 0 ];then
       printf "%s\n" "${PRINT_DATA}" >&2
     else
-      printf "${ANSI_COLOR_YELLOW}${ANSI_COLOR_BACK_BLUE}%s\n${ANSI_COLOR_NONE}" "${PRINT_DATA}" >&2
+      local GREP_CLEAR=$'\E[m\E[K'
+      PRINT_DATA="${PRINT_DATA//$(echo ${GREP_CLEAR})/$(echo ${GREP_CLEAR}${ANSI_COLOR_YELLOW}${ANSI_COLOR_BACK_BLUE})}"
+      printf "${ANSI_COLOR_YELLOW}${ANSI_COLOR_BACK_BLUE}%s${ANSI_COLOR_NONE}\n" "${PRINT_DATA}" >&2
     fi
   }
 
@@ -192,14 +197,15 @@ function boco() {
     local SEARCH_WORD_COUNT=${#SEARCH_WORD}
 
     if [[ ${SEARCH_WORD_COUNT} -gt 0 ]];then
+      # clear VIEW_ARRAY_DATA
       VIEW_ARRAY_DATA=()
-      for ((i=0;i<"${#ARRAY_DATA[@]}";i++));
-      do
-        DATA_ELEMENT="${ARRAY_DATA[$i]}"
-        if [[ "${DATA_ELEMENT,,}" == *"${SEARCH_WORD}"* ]];then
-          VIEW_ARRAY_DATA=(${VIEW_ARRAY_DATA[@]} "${DATA_ELEMENT}")
-        fi
-      done
+
+      # grep DATA
+      local ARRAY_STR="$(IFS=$'\n';echo "${ARRAY_DATA[*]}")"
+      local VIEW_ARRAY_STR="$(echo "${ARRAY_STR}" | \grep --color=always -i "${SEARCH_WORD}")"
+
+      # set VIEW_ARRAY_DATA
+      VIEW_ARRAY_DATA=($(echo "${VIEW_ARRAY_STR}"))
     else
       VIEW_ARRAY_DATA=(${ARRAY_DATA[@]})
     fi
@@ -236,12 +242,18 @@ function boco() {
     for ((i=0;i<${MAX_LINE};i++)) {
       echo ""
     }
+
     printf "\e[${NOW_CURSOR_LINE};0H" >&2
   }
+
+  # function __update_scroll_position() {
+  #   LIST_SCROLL_POSITION
+  # }
 
   # @brief: trap ctrl + c
   function __trap_2() {
     __clear_print_data
+    local IFS=${OLD_IFS}
     exit 1
   }
 
@@ -289,6 +301,7 @@ function boco() {
   __print_data
 
   # get input key loop
+  local IFS=$'\n'
   while true
   do
     # get input key
@@ -344,6 +357,31 @@ function boco() {
         fi
         ;;
 
+      # input Space Key
+      " ")
+        SEARCH_WORD=${SEARCH_WORD}${INPUT_KEY}
+        __update_view_array_data
+        __clear_print_data
+        __update_max_line
+        __print_data
+        ;;
+
+      # input Tab key
+      # Toggle multi select.
+      $'\x09')
+        __clear_print_data
+        echo "Tab"
+        break
+        ;;
+
+      # input Ctrl + R key
+      # Toggle grep mode(plane <-> regex).
+      $'\cr')
+        __clear_print_data
+        echo "Ctrl + R"
+        break
+        ;;
+
       # input Enter key
       "")
         __clear_print_data
@@ -361,4 +399,5 @@ function boco() {
         ;;
     esac
   done
+  local IFS=${OLD_IFS}
 }
