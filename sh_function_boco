@@ -62,6 +62,7 @@ function boco() {
 
   # env
   local -r OLD_IFS=${IFS}
+  local GREP_COLORS='ln=:se='
 
   # cmd
   local CMD_GREP
@@ -203,9 +204,9 @@ function boco() {
 
     # grep DATA
     if [[ ${SEARCH_WORD_COUNT} -gt 0 ]];then
-      local VIEW_ARRAY_STR="$(echo "${ARRAY_STR}" | \grep -n --color=always -i "${SEARCH_WORD}")"
+      local VIEW_ARRAY_STR="$(echo "${ARRAY_STR}" | GREP_COLORS='ln=:se=' \grep -n --color=always -i "${SEARCH_WORD}")"
     else
-      local VIEW_ARRAY_STR="$(echo "${ARRAY_STR}" | \grep -n -E ".*")"
+      local VIEW_ARRAY_STR="$(echo "${ARRAY_STR}" | GREP_COLORS='ln=:se=' \grep -n -E ".*")"
     fi
 
     # set VIEW_ARRAY_DATA
@@ -412,14 +413,16 @@ function boco() {
       # input Enter key
       "")
         __clear_print_data
+
         if [[ ${#LIST_SELECTED_LINE} -eq 0 ]];then
-          LINE="${VIEW_ARRAY_DATA[${LIST_NOW_LINE}]}"
+          local LINE="${VIEW_ARRAY_DATA[${LIST_NOW_LINE}]}"
           LIST_SELECTED_LINE=(${LINE%%:*})
         fi
-        # echo "${VIEW_ARRAY_DATA[${LIST_NOW_LINE}]}"
 
         for NO in ${LIST_SELECTED_LINE[@]};
         do
+          # NO=$(echo "${NO}" | \perl -ne 's/\e\[\d+(?>(;\d+)*)m//g;print')
+          # echo ${NO} | cat -A
           echo "${ARRAY_DATA[$((${NO} - 1))]}"
         done
         break
