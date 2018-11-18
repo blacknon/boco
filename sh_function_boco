@@ -3,12 +3,11 @@
 # @NOTE:
 #    note.
 # @TODO:
-#    ・DATAの行数が残りのターミナル行数より多い場合の処理について
-#    　・上下キーでスクロールさせるようにする
 #    ・出力行の検索、絞り込み機能の追加
 #    　・正規表現での検索機能
 #    　・Ctrl+Rで切り替えできるようにする
-#    ・複数行の選択機能(Tabキー？)
+#    ・複数行の選択機能(Tabキー)
+#    ・行表示の処理を、最低限の画面更新にしてパフォーマンスを改善する
 #    ・zshでfunctionとして読み込んでも動作するようにする
 #    ・バッファを挟んで、リアルタイムで出力が追加されても対応できるようにする
 #    ・上下キーの使用時では、色が変わる行のみ出力し直すことで対処させる
@@ -56,7 +55,8 @@ function boco() {
   local NOW_CURSOR_LINE # Now cursor position in terminal(line)
   local LIST_NOW_LINE # now cursor line (in boco list)
   local LIST_SELECTED_LINE # now selected line (in boco list. array)
-  local MAX_LINE # boco list max line (in terminal)
+  local MAX_LINE # VIEW_ARRAY_MAX_LINE
+  local VIEW_MAX_LINE # max line in terminal
   local LIST_SCROLL_POSITION # boco list scroll position (1st line)
   local SURPLUS_LINE
 
@@ -102,6 +102,8 @@ function boco() {
   #          ${3} ... SELECTED_LINE_FLAG(0(true)|1(false))
   #          ${4} ... PRINT_DATA
   function __print_line_position() {
+    IFS=$'\n'
+
     # variable
     local ADD_LINE
     local CURSOR_LINE_FLAG
@@ -112,7 +114,8 @@ function boco() {
     CURSOR_LINE_FLAG="${2}"
     PRINT_LINE=$((${NOW_CURSOR_LINE} + ${ADD_LINE}))
     SELECTED_LINE_FLAG="${3}"
-    PRINT_DATA=${4}
+    LINE=${4}
+    PRINT_DATA=${LINE#*:}
 
     # move cursor
     printf "\e["${PRINT_LINE}";0H" >&2
@@ -125,6 +128,8 @@ function boco() {
       PRINT_DATA="${PRINT_DATA//$(echo ${GREP_CLEAR})/$(echo ${GREP_CLEAR}${ANSI_COLOR_YELLOW}${ANSI_COLOR_BACK_BLUE})}"
       printf "${ANSI_COLOR_YELLOW}${ANSI_COLOR_BACK_BLUE}%s${ANSI_COLOR_NONE}\n" "${PRINT_DATA}" >&2
     fi
+
+    IFS=${OLD_IFS}
   }
 
   # @brief:
@@ -145,16 +150,19 @@ function boco() {
     printf "${HEADER_TEXT}\n" >&2
 
     # print line
-    LIST_RANGE_MIN="${LIST_SCROLL_POSITION}"
-    LIST_RANGE_MAX=$((${LIST_RANGE_MIN} + ${MAX_LINE}))
+    # LIST_RANGE_MIN=${LIST_SCROLL_POSITION}
+    LIST_RANGE_MAX=$((${LIST_SCROLL_POSITION} + ${VIEW_MAX_LINE}))
 
-    for ((i="${LIST_RANGE_MIN}";i<"${LIST_RANGE_MAX}";i++));
+    # for ((i=${LIST_RANGE_MIN};i<${LIST_RANGE_MAX};i++));
+    local x=0
+    for (( i = ${LIST_SCROLL_POSITION} ;i<${LIST_RANGE_MAX};i++));
     do
       if [ ${LIST_NOW_LINE} -eq ${i} ];then
-        __print_line_position "$((${i}+1))" 1 0 "${VIEW_ARRAY_DATA[${i}]}"
+        __print_line_position "$((${x}+1))" 1 0 "${VIEW_ARRAY_DATA[${i}]}"
       else
-        __print_line_position "$((${i}+1))" 0 0 "${VIEW_ARRAY_DATA[${i}]}"
+        __print_line_position "$((${x}+1))" 0 0 "${VIEW_ARRAY_DATA[${i}]}"
       fi
+      x=$((${x} + 1 ))
     done
 
     # cursor move to header
@@ -170,7 +178,7 @@ function boco() {
     # clear line
     echo $'\e[2K' $'\e[1A' >&2
 
-    for ((i=0;i<"${MAX_LINE}";i++));
+    for ((i=0;i<"${VIEW_MAX_LINE}";i++));
     do
       # move cursor 1 down
       echo $'\e[1B' >&2
@@ -189,20 +197,19 @@ function boco() {
     local IFS=$'\n'
     local SEARCH_WORD_COUNT=${#SEARCH_WORD}
 
+    # clear VIEW_ARRAY_DATA
+    VIEW_ARRAY_DATA=()
+    local ARRAY_STR="$(IFS=$'\n';echo "${ARRAY_DATA[*]}")"
+
+    # grep DATA
     if [[ ${SEARCH_WORD_COUNT} -gt 0 ]];then
-      # clear VIEW_ARRAY_DATA
-      VIEW_ARRAY_DATA=()
-
-      # grep DATA
-      local ARRAY_STR="$(IFS=$'\n';echo "${ARRAY_DATA[*]}")"
-      local VIEW_ARRAY_STR="$(echo "${ARRAY_STR}" | \grep --color=always -i "${SEARCH_WORD}")"
-
-      # set VIEW_ARRAY_DATA
-      VIEW_ARRAY_DATA=($(echo "${VIEW_ARRAY_STR}"))
+      local VIEW_ARRAY_STR="$(echo "${ARRAY_STR}" | \grep -n --color=always -i "${SEARCH_WORD}")"
     else
-      VIEW_ARRAY_DATA=(${ARRAY_DATA[@]})
+      local VIEW_ARRAY_STR="$(echo "${ARRAY_STR}" | \grep -n -E ".*")"
     fi
 
+    # set VIEW_ARRAY_DATA
+    VIEW_ARRAY_DATA=($(echo "${VIEW_ARRAY_STR}"))
     local IFS=${OLD_IFS}
   }
 
@@ -210,38 +217,73 @@ function boco() {
   function __update_max_line() {
     # set MAX_LINE
     MAX_LINE="${#VIEW_ARRAY_DATA[@]}"
+    VIEW_MAX_LINE="${MAX_LINE}"
 
     SURPLUS_LINE=$((${TERMINAL_LINES} - ${NOW_CURSOR_LINE}))
 
-    # if [ SURPLUS_LINE <= MAX_LINE ]
-    if [[ "${SURPLUS_LINE}" -le "$((${TERMINAL_LINES} / 2))" ]];then
+    # if [ SURPLUS_LINE <= (TERMINAL_LINES/2) ]
+    if [[ ${SURPLUS_LINE} -le $((${TERMINAL_LINES} / 2)) ]];then
       SURPLUS_LINE=$((${TERMINAL_LINES} / 2))
     fi
 
     # if [ SURPLUS_LINE <= MAX_LINE ]
-    if [[ "${SURPLUS_LINE}" -le "${MAX_LINE}" ]];then
-      MAX_LINE="${SURPLUS_LINE}"
+    if [[ ${SURPLUS_LINE} -le ${VIEW_MAX_LINE} ]];then
+      VIEW_MAX_LINE="${SURPLUS_LINE}"
     fi
 
     # if [ $((${TERMINAL_LINES} - ${MAX_LINE})) <= NOW_CURSOR_LINE ]
-    if [[ $((${TERMINAL_LINES} - ${MAX_LINE})) -le ${NOW_CURSOR_LINE} ]];then
-      NOW_CURSOR_LINE=$((${TERMINAL_LINES} - ${MAX_LINE}))
+    if [[ $((${TERMINAL_LINES} - ${VIEW_MAX_LINE})) -le ${NOW_CURSOR_LINE} ]];then
+      NOW_CURSOR_LINE=$((${TERMINAL_LINES} - ${VIEW_MAX_LINE}))
     fi
 
-    if [[ ${LIST_NOW_LINE} -gt $((${MAX_LINE})) ]];then
-      local LIST_NOW_LINE=$((${MAX_LINE}))
+    if [[ ${LIST_NOW_LINE} -gt $((${VIEW_MAX_LINE})) ]];then
+      local LIST_NOW_LINE=$((${VIEW_MAX_LINE}))
     fi
 
-    for ((i=0;i<${MAX_LINE};i++)) {
+    for ((i=0;i<${VIEW_MAX_LINE};i++)) {
       echo ""
     }
 
     printf "\e[${NOW_CURSOR_LINE};0H" >&2
   }
 
-  # function __update_scroll_position() {
-  #   LIST_SCROLL_POSITION
-  # }
+  function __scroll_up() {
+    LIST_NOW_LINE=$((${LIST_NOW_LINE} - 1))
+    if [[ ${LIST_NOW_LINE} -le 0 ]];then
+      LIST_NOW_LINE=0
+    fi
+
+    # scroll up
+    LIST_RANGE_MIN=${LIST_SCROLL_POSITION}
+    if [[ ${LIST_NOW_LINE} -le ${LIST_RANGE_MIN} ]];then
+      # if scroll up
+      LIST_SCROLL_POSITION=$((${LIST_SCROLL_POSITION} - 1))
+
+      if [[ ${LIST_SCROLL_POSITION} -lt 0 ]];then
+        LIST_SCROLL_POSITION=0
+      fi
+    fi
+
+    __clear_print_data
+    __print_data
+  }
+
+  function __scroll_down() {
+    LIST_NOW_LINE=$((${LIST_NOW_LINE} + 1))
+    if [[ ${LIST_NOW_LINE} -ge $((${MAX_LINE} - 1)) ]];then
+      LIST_NOW_LINE=$((${MAX_LINE} - 1))
+    fi
+
+    # scroll down
+    local LIST_RANGE_MAX=$((${LIST_SCROLL_POSITION} + ${VIEW_MAX_LINE}))
+    if [[ ${LIST_NOW_LINE} -ge ${LIST_RANGE_MAX} ]];then
+      # if scroll down
+      LIST_SCROLL_POSITION=$((${LIST_SCROLL_POSITION} + 1))
+    fi
+
+    __clear_print_data
+    __print_data
+  }
 
   # @brief: trap ctrl + c
   function __trap_2() {
@@ -267,7 +309,6 @@ function boco() {
   # DATA to Array
   local IFS=$'\n'
   local ARRAY_DATA=($(echo "${DATA}"))
-  local VIEW_ARRAY_DATA=(${ARRAY_DATA[@]})
   local IFS=${OLD_IFS}
 
   # get cursor positon
@@ -279,13 +320,16 @@ function boco() {
   local TERMINAL_LINES=$((${LINES} - 1))
   local TERMINAL_COLUMNS=$((${COLUMNS} - 1))
 
-  # set MAX_LINE
+  # update VIEW_ARRAY_DATA
+  __update_view_array_data
+
+  # set MAX_LINE & VIEW_MAX_LINE
   __update_max_line
 
   # set LIST_NOW_LINE, LIST_SELECTED_LINE
-  local LIST_NOW_LINE=0
-  local LIST_SCROLL_POSITION=0
-  local LIST_SELECTED_LINE=(0)
+  LIST_NOW_LINE=0
+  LIST_SCROLL_POSITION=0
+  LIST_SELECTED_LINE=()
 
   # set SEARCH_WORD
   local SEARCH_WORD=""
@@ -310,22 +354,12 @@ function boco() {
         case "${TMP_KEY}" in
           # up key
           "A")
-            local LIST_NOW_LINE=$((${LIST_NOW_LINE} - 1))
-            if [[ ${LIST_NOW_LINE} -le 0 ]];then
-              local LIST_NOW_LINE=0
-            fi
-            __clear_print_data
-            __print_data
+            __scroll_up
             ;;
 
           # down key
           "B")
-            local LIST_NOW_LINE=$((${LIST_NOW_LINE} + 1))
-            if [[ "${LIST_NOW_LINE}" -ge $((${MAX_LINE} - 1)) ]];then
-              local LIST_NOW_LINE=$((${MAX_LINE} - 1))
-            fi
-            __clear_print_data
-            __print_data
+            __scroll_down
             ;;
         esac
       fi
@@ -340,7 +374,7 @@ function boco() {
         local SEARCH_WORD_COUNT=${#SEARCH_WORD}
 
         # 検索ワードの文字数が0より大きい場合、文字を削除して表示を更新する
-        if [[ "${SEARCH_WORD_COUNT}" -gt 0 ]];then
+        if [[ ${SEARCH_WORD_COUNT} -gt 0 ]];then
           local SEARCH_WORD_COUNT=$((${SEARCH_WORD_COUNT} - 1))
           local SEARCH_WORD=${SEARCH_WORD::${SEARCH_WORD_COUNT}}
           __update_view_array_data
@@ -361,24 +395,33 @@ function boco() {
 
       # input Tab key
       # Toggle multi select.
-      $'\x09')
-        __clear_print_data
-        echo "Tab"
-        break
-        ;;
+      # $'\x09')
+      #   __clear_print_data
+      #   echo "Tab"
+      #   break
+      #   ;;
 
       # input Ctrl + R key
       # Toggle grep mode(plane <-> regex).
-      $'\cr')
-        __clear_print_data
-        echo "Ctrl + R"
-        break
-        ;;
+      # $'\cr')
+      #   __clear_print_data
+      #   echo "Ctrl + R"
+      #   break
+      #   ;;
 
       # input Enter key
       "")
         __clear_print_data
-        echo "${VIEW_ARRAY_DATA[${LIST_NOW_LINE}]}"
+        if [[ ${#LIST_SELECTED_LINE} -eq 0 ]];then
+          LINE="${VIEW_ARRAY_DATA[${LIST_NOW_LINE}]}"
+          LIST_SELECTED_LINE=(${LINE%%:*})
+        fi
+        # echo "${VIEW_ARRAY_DATA[${LIST_NOW_LINE}]}"
+
+        for NO in ${LIST_SELECTED_LINE[@]};
+        do
+          echo "${ARRAY_DATA[$((${NO} - 1))]}"
+        done
         break
         ;;
 
