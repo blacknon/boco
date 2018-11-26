@@ -237,7 +237,7 @@ function boco() {
     fi
 
     if [[ ${LIST_NOW_LINE} -gt $((${VIEW_MAX_LINE})) ]];then
-      local LIST_NOW_LINE=$((${VIEW_MAX_LINE}))
+      LIST_NOW_LINE=$((${VIEW_MAX_LINE} - 1))
     fi
 
     for ((i=0;i<${VIEW_MAX_LINE};i++)) {
@@ -249,8 +249,9 @@ function boco() {
 
   function __scroll_up() {
     LIST_NOW_LINE=$((${LIST_NOW_LINE} - 1))
-    if [[ ${LIST_NOW_LINE} -le 0 ]];then
+    if [[ ${LIST_NOW_LINE} -lt 0 ]];then
       LIST_NOW_LINE=0
+      return
     fi
 
     # scroll up
@@ -262,16 +263,35 @@ function boco() {
       if [[ ${LIST_SCROLL_POSITION} -lt 0 ]];then
         LIST_SCROLL_POSITION=0
       fi
-    fi
 
-    __clear_print_data
-    __print_data
+      __clear_print_data
+      __print_data
+    else
+      local HEADER_TEXT
+      local HEADER_TEXT_COUNT
+      local TERM_LINE
+
+      HEADER_TEXT="QUERY: ${SEARCH_WORD} "
+      HEADER_TEXT_COUNT=${#HEADER_TEXT}
+      TERM_LINE=$((${LIST_NOW_LINE} + ${LIST_SCROLL_POSITION}))
+
+      # unselect line
+      __print_line_position "$((${TERM_LINE} + 2))" 0 0 "${VIEW_ARRAY_DATA[$((${LIST_NOW_LINE} + 1))]}"
+
+      # select line
+      __print_line_position "$((${TERM_LINE} + 1))" 1 0 "${VIEW_ARRAY_DATA[${LIST_NOW_LINE}]}"
+
+      # move cursor
+      printf "\e[${NOW_CURSOR_LINE};${HEADER_TEXT_COUNT}H" >&2
+
+    fi
   }
 
   function __scroll_down() {
     LIST_NOW_LINE=$((${LIST_NOW_LINE} + 1))
-    if [[ ${LIST_NOW_LINE} -ge $((${MAX_LINE} - 1)) ]];then
+    if [[ ${LIST_NOW_LINE} -gt $((${MAX_LINE} - 1)) ]];then
       LIST_NOW_LINE=$((${MAX_LINE} - 1))
+      return
     fi
 
     # scroll down
@@ -279,10 +299,26 @@ function boco() {
     if [[ ${LIST_NOW_LINE} -ge ${LIST_RANGE_MAX} ]];then
       # if scroll down
       LIST_SCROLL_POSITION=$((${LIST_SCROLL_POSITION} + 1))
-    fi
+      __clear_print_data
+      __print_data
+    else
+      local HEADER_TEXT
+      local HEADER_TEXT_COUNT
+      local TERM_LINE
 
-    __clear_print_data
-    __print_data
+      HEADER_TEXT="QUERY: ${SEARCH_WORD} "
+      HEADER_TEXT_COUNT=${#HEADER_TEXT}
+      TERM_LINE=$((${LIST_NOW_LINE} + ${LIST_SCROLL_POSITION}))
+
+      # unselect line
+      __print_line_position "${TERM_LINE}" 0 0 "${VIEW_ARRAY_DATA[$((${LIST_NOW_LINE} - 1))]}"
+
+      # select line
+      __print_line_position "$((${TERM_LINE} + 1))" 1 0 "${VIEW_ARRAY_DATA[${LIST_NOW_LINE}]}"
+
+      # move cursor
+      printf "\e[${NOW_CURSOR_LINE};${HEADER_TEXT_COUNT}H" >&2
+    fi
   }
 
   # @brief: trap ctrl + c
