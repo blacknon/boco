@@ -154,14 +154,13 @@ function boco() {
     # LIST_RANGE_MIN=${LIST_SCROLL_POSITION}
     LIST_RANGE_MAX=$((${LIST_SCROLL_POSITION} + ${VIEW_MAX_LINE}))
 
-    # for ((i=${LIST_RANGE_MIN};i<${LIST_RANGE_MAX};i++));
     local x=0
-    for (( i = ${LIST_SCROLL_POSITION} ;i<${LIST_RANGE_MAX};i++));
+    for ((i=${LIST_SCROLL_POSITION};i<${LIST_RANGE_MAX};i++));
     do
       if [ ${LIST_NOW_LINE} -eq ${i} ];then
-        __print_line_position "$((${x}+1))" 1 0 "${VIEW_ARRAY_DATA[${i}]}"
+        __print_line_position "$((${x} + 1))" 1 0 "${VIEW_ARRAY_DATA[${i}]}"
       else
-        __print_line_position "$((${x}+1))" 0 0 "${VIEW_ARRAY_DATA[${i}]}"
+        __print_line_position "$((${x} + 1))" 0 0 "${VIEW_ARRAY_DATA[${i}]}"
       fi
       x=$((${x} + 1 ))
     done
@@ -421,8 +420,6 @@ function boco() {
 
         for NO in ${LIST_SELECTED_LINE[@]};
         do
-          # NO=$(echo "${NO}" | \perl -ne 's/\e\[\d+(?>(;\d+)*)m//g;print')
-          # echo ${NO} | cat -A
           echo "${ARRAY_DATA[$((${NO} - 1))]}"
         done
         break
