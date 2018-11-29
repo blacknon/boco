@@ -203,9 +203,9 @@ function boco() {
 
     # grep DATA
     if [[ ${SEARCH_WORD_COUNT} -gt 0 ]];then
-      local VIEW_ARRAY_STR="$(echo "${ARRAY_STR}" | GREP_COLORS='ln=:se=' \grep -n --color=always -i "${SEARCH_WORD}")"
+      local VIEW_ARRAY_STR="$(echo "${ARRAY_STR}" | GREP_COLORS='ln=:se=' \grep -F -n --color=always -i "${SEARCH_WORD}")"
     else
-      local VIEW_ARRAY_STR="$(echo "${ARRAY_STR}" | GREP_COLORS='ln=:se=' \grep -n -E ".*")"
+      local VIEW_ARRAY_STR="$(echo "${ARRAY_STR}" | GREP_COLORS='ln=:se=' \grep -F -n -E ".*")"
     fi
 
     # set VIEW_ARRAY_DATA
@@ -236,7 +236,15 @@ function boco() {
       NOW_CURSOR_LINE=$((${TERMINAL_LINES} - ${VIEW_MAX_LINE}))
     fi
 
-    if [[ ${LIST_NOW_LINE} -gt $((${VIEW_MAX_LINE})) ]];then
+    if [[ ${MAX_LINE} -le ${LIST_SCROLL_POSITION} ]];then
+      LIST_SCROLL_POSITION=$((${MAX_LINE} - 1))
+
+      if [[ ${LIST_SCROLL_POSITION} -lt 0 ]];then
+        LIST_SCROLL_POSITION=0
+      fi
+    fi
+
+    if [[ ${LIST_NOW_LINE} -ge $((${VIEW_MAX_LINE})) ]];then
       LIST_NOW_LINE=$((${VIEW_MAX_LINE} - 1))
     fi
 
@@ -256,7 +264,7 @@ function boco() {
 
     # scroll up
     LIST_RANGE_MIN=${LIST_SCROLL_POSITION}
-    if [[ ${LIST_NOW_LINE} -le ${LIST_RANGE_MIN} ]];then
+    if [[ ${LIST_NOW_LINE} -lt ${LIST_RANGE_MIN} ]];then
       # if scroll up
       LIST_SCROLL_POSITION=$((${LIST_SCROLL_POSITION} - 1))
 
@@ -273,7 +281,8 @@ function boco() {
 
       HEADER_TEXT="QUERY: ${SEARCH_WORD} "
       HEADER_TEXT_COUNT=${#HEADER_TEXT}
-      TERM_LINE=$((${LIST_NOW_LINE} + ${LIST_SCROLL_POSITION}))
+
+      TERM_LINE=$((${LIST_NOW_LINE} - ${LIST_SCROLL_POSITION}))
 
       # unselect line
       __print_line_position "$((${TERM_LINE} + 2))" 0 0 "${VIEW_ARRAY_DATA[$((${LIST_NOW_LINE} + 1))]}"
@@ -283,7 +292,6 @@ function boco() {
 
       # move cursor
       printf "\e[${NOW_CURSOR_LINE};${HEADER_TEXT_COUNT}H" >&2
-
     fi
   }
 
@@ -308,7 +316,8 @@ function boco() {
 
       HEADER_TEXT="QUERY: ${SEARCH_WORD} "
       HEADER_TEXT_COUNT=${#HEADER_TEXT}
-      TERM_LINE=$((${LIST_NOW_LINE} + ${LIST_SCROLL_POSITION}))
+
+      TERM_LINE=$((${LIST_NOW_LINE} - ${LIST_SCROLL_POSITION}))
 
       # unselect line
       __print_line_position "${TERM_LINE}" 0 0 "${VIEW_ARRAY_DATA[$((${LIST_NOW_LINE} - 1))]}"
