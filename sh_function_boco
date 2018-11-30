@@ -88,6 +88,7 @@ function boco() {
     # get position data
     printf "${ANSI_CURSOR_GET}" > /dev/tty
     IFS=';' read -r -d R -a CURSOR
+    IFS=$'\n'
     stty "${OLD_STTY}"
 
     # parse row, column
@@ -103,8 +104,6 @@ function boco() {
   #          ${3} ... SELECTED_LINE_FLAG(0(true)|1(false))
   #          ${4} ... PRINT_DATA
   function __print_line_position() {
-    IFS=$'\n'
-
     # variable
     local ADD_LINE
     local CURSOR_LINE_FLAG
@@ -129,8 +128,6 @@ function boco() {
       PRINT_DATA="${PRINT_DATA//$(echo ${GREP_CLEAR})/$(echo ${GREP_CLEAR}${ANSI_COLOR_YELLOW}${ANSI_COLOR_BACK_BLUE})}"
       printf "${ANSI_COLOR_YELLOW}${ANSI_COLOR_BACK_BLUE}%s${ANSI_COLOR_NONE}\n" "${PRINT_DATA}" >&2
     fi
-
-    IFS=${OLD_IFS}
   }
 
   # @brief:
@@ -151,8 +148,10 @@ function boco() {
     printf "${HEADER_TEXT}\n" >&2
 
     # print line
-    # LIST_RANGE_MIN=${LIST_SCROLL_POSITION}
     LIST_RANGE_MAX=$((${LIST_SCROLL_POSITION} + ${VIEW_MAX_LINE}))
+
+
+    # @TODO LIST_SELECTED_LINEの番号に入ってる場合、表示を切り替えるようにする
 
     local x=0
     for ((i=${LIST_SCROLL_POSITION};i<${LIST_RANGE_MAX};i++));
@@ -184,7 +183,7 @@ function boco() {
       echo $'\e[1B' >&2
 
       # clear line
-      echo $'\e[1A' $'\e[1G' $'\e[2K' $'\e[1A' >&2
+      echo $'\e[1A'$'\e[1G'$'\e[2K'$'\e[1A' >&2
     done
 
     # move cursor
@@ -194,18 +193,40 @@ function boco() {
   # @brief:
   #     update view array data.
   function __update_view_array_data() {
+    local SEARCH_WORD_COUNT
+    local ARRAY_STR
+    local VIEW_ARRAY_STR
+    local SEARCH_WORD_ARRAY
+    local FOR_COUNT
+
     local IFS=$'\n'
-    local SEARCH_WORD_COUNT=${#SEARCH_WORD}
+    SEARCH_WORD_COUNT=${#SEARCH_WORD}
 
     # clear VIEW_ARRAY_DATA
     VIEW_ARRAY_DATA=()
-    local ARRAY_STR="$(IFS=$'\n';echo "${ARRAY_DATA[*]}")"
+    ARRAY_STR="$(IFS=$'\n';echo "${ARRAY_DATA[*]}")"
 
     # grep DATA
     if [[ ${SEARCH_WORD_COUNT} -gt 0 ]];then
-      local VIEW_ARRAY_STR="$(echo "${ARRAY_STR}" | GREP_COLORS='ln=:se=' \grep -F -n --color=always -i "${SEARCH_WORD}")"
+      # split string at space
+      IFS=" " read -ra SEARCH_WORD_ARRAY <<< ${SEARCH_WORD}
+      IFS=$'\n'
+      VIEW_ARRAY_STR="${ARRAY_STR}"
+
+      FOR_COUNT=0
+      for i in "${SEARCH_WORD_ARRAY[@]}"; do
+        if [[ ${FOR_COUNT} -eq 0 ]];then
+          # with number
+          VIEW_ARRAY_STR="$(echo "${VIEW_ARRAY_STR}" | GREP_COLORS='ln=:se=' \grep -F -n --color=always -i "${i}")"
+        else
+          # without number
+          VIEW_ARRAY_STR="$(echo "${VIEW_ARRAY_STR}" | GREP_COLORS='ln=:se=' \grep -F --color=always -i "${i}")"
+        fi
+        FOR_COUNT+=1
+      done
     else
-      local VIEW_ARRAY_STR="$(echo "${ARRAY_STR}" | GREP_COLORS='ln=:se=' \grep -F -n -E ".*")"
+      # use regex
+      VIEW_ARRAY_STR="$(echo "${ARRAY_STR}" | GREP_COLORS='ln=:se=' \grep -n -E '.*')"
     fi
 
     # set VIEW_ARRAY_DATA
@@ -440,11 +461,14 @@ function boco() {
 
       # input Tab key
       # Toggle multi select.
-      # $'\x09')
-      #   __clear_print_data
-      #   echo "Tab"
-      #   break
-      #   ;;
+      $'\x09')
+        # add selected line
+        local LINE="${VIEW_ARRAY_DATA[${LIST_NOW_LINE}]}"
+        LIST_SELECTED_LINE=(${LIST_SELECTED_LINE[@]} ${LINE%%:*})
+        __clear_print_data
+        __update_max_line
+        __print_data
+        ;;
 
       # input Ctrl + R key
       # Toggle grep mode(plane <-> regex).
@@ -468,6 +492,7 @@ function boco() {
           echo "${ARRAY_DATA[$((${NO} - 1))]}"
         done
         break
+
         ;;
 
       # other key
