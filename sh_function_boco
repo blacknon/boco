@@ -17,12 +17,17 @@
 ## ----------
 function boco() {
   ## ----------
-  # shopt
+  # shopt/setopt
   ## ----------
   # set shopt(windows size. only bash)
-  if [[ "${SHELL##*/}" == "bash" ]];then
-    shopt -s checkwinsize; (:;:)
-  fi
+  case "${SHELL##*/}" in
+    bash*)
+      shopt -s checkwinsize; (:;:)
+      ;;
+    zsh*)
+      setopt localoptions ksharrays
+      ;;
+  esac
 
   ## ----------
   # variable
@@ -88,14 +93,23 @@ function boco() {
 
     # get position data
     printf "${ANSI_CURSOR_GET}" > /dev/tty
-    IFS=';' read -r -d R -a CURSOR
+
+    case "${SHELL##*/}" in
+      bash*)
+        IFS=';' read -r -d R -a CURSOR
+        ;;
+      zsh*)
+        IFS=';' read -t 1 -s -d R CURSOR
+        ;;
+    esac
+
     IFS=$'\n'
     stty "${OLD_STTY}"
 
-    # parse row, column
-    local NOW_CURSOR_ROW="${CURSOR[0]:2}"
-    local NOW_CURSOR_COLUMN="${CURSOR[1]}"
-    echo "${NOW_CURSOR_ROW}" "${NOW_CURSOR_COLUMN}"
+    CURSOR="${CURSOR##*\[}"
+    CURSOR="${CURSOR%;*}"
+
+    NOW_CURSOR_LINE=${CURSOR}
   }
 
   # @brief: print data line with ANSI escape code.
@@ -142,6 +156,7 @@ function boco() {
     local HEADER_TEXT_COUNT
     local LIST_RANGE_MAX
     local LIST_RANGE_MIN
+    local LIST_TEXT
 
     # move cursor
     printf "\e[${NOW_CURSOR_LINE};0H" >&2
@@ -157,18 +172,18 @@ function boco() {
     local x=0
     for ((i=${LIST_SCROLL_POSITION};i<${LIST_RANGE_MAX};i++));
     do
-
-      # @TODO 現在の行がLIST_SELECTED_LINEに含まれている場合の分岐
+      # テキストを変数に代入
+      LIST_LINE="${VIEW_ARRAY_DATA[${i}]}"
 
       if [[ ${LIST_NOW_LINE} -eq ${i} ]];then
         # print now select line
-        __print_line_position $((${x} + 1)) 0 "${VIEW_ARRAY_DATA[${i}]}"
-      elif [[ $(__check_include $((${i} + 1)) ${LIST_SELECTED_LINE[@]}) -eq 0 ]]; then
+        __print_line_position $((${x} + 1)) 0 "${LIST_LINE}"
+      elif [[ $(__selected_check_in ${LIST_LINE%%:*}) -eq 0 ]]; then
         # print selected line
-        __print_line_position $((${x} + 1)) 1 "${VIEW_ARRAY_DATA[${i}]}"
+        __print_line_position $((${x} + 1)) 1 "${LIST_LINE}"
       else
         # print other line
-        __print_line_position $((${x} + 1)) 2 "${VIEW_ARRAY_DATA[${i}]}"
+        __print_line_position $((${x} + 1)) 2 "${LIST_LINE}"
       fi
       x=$((${x} + 1 ))
     done
@@ -186,7 +201,7 @@ function boco() {
     # clear line
     echo $'\e[2K' $'\e[1A' >&2
 
-    for ((i=0;i<"${VIEW_MAX_LINE}";i++));
+    for ((i=0;i<${VIEW_MAX_LINE};i++));
     do
       # move cursor 1 down
       echo $'\e[1B' >&2
@@ -202,6 +217,14 @@ function boco() {
   # @brief:
   #     update view array data.
   function __update_view_array_data() {
+    case "${SHELL##*/}" in
+      bash*)
+        shopt -s checkwinsize; (:;:)
+        ;;
+      zsh*)
+        setopt localoptions ksharrays
+        ;;
+    esac
     local SEARCH_WORD_COUNT
     local ARRAY_STR
     local VIEW_ARRAY_STR
@@ -218,20 +241,28 @@ function boco() {
     # grep DATA
     if [[ ${SEARCH_WORD_COUNT} -gt 0 ]];then
       # split string at space
-      IFS=" " read -ra SEARCH_WORD_ARRAY <<< ${SEARCH_WORD}
+      case "${SHELL##*/}" in
+        bash*)
+          IFS=" " read -r -a SEARCH_WORD_ARRAY <<< "${SEARCH_WORD}"
+          ;;
+        zsh*)
+          IFS=" " read -r -A SEARCH_WORD_ARRAY <<< "${SEARCH_WORD}"
+          ;;
+      esac
+
       IFS=$'\n'
       VIEW_ARRAY_STR="${ARRAY_STR}"
 
       FOR_COUNT=0
-      for i in "${SEARCH_WORD_ARRAY[@]}"; do
+      for WORD in ${SEARCH_WORD_ARRAY[*]}; do
         if [[ ${FOR_COUNT} -eq 0 ]];then
           # with number
-          VIEW_ARRAY_STR="$(echo "${VIEW_ARRAY_STR}" | GREP_COLORS='ln=:se=' \grep -F -n --color=always -i "${i}")"
+          VIEW_ARRAY_STR="$(echo "${VIEW_ARRAY_STR}" | GREP_COLORS='ln=:se=' \grep -F -n --color=always -i ${WORD})"
         else
           # without number
-          VIEW_ARRAY_STR="$(echo "${VIEW_ARRAY_STR}" | GREP_COLORS='ln=:se=' \grep -F --color=always -i "${i}")"
+          VIEW_ARRAY_STR="$(echo "${VIEW_ARRAY_STR}" | GREP_COLORS='ln=:se=' \grep -F --color=always -i ${WORD})"
         fi
-        FOR_COUNT+=1
+        FOR_COUNT=$((FOR_COUNT + 1))
       done
     else
       # use regex
@@ -247,7 +278,7 @@ function boco() {
   function __update_max_line() {
     # set MAX_LINE
     MAX_LINE="${#VIEW_ARRAY_DATA[@]}"
-    VIEW_MAX_LINE="${MAX_LINE}"
+    VIEW_MAX_LINE=${MAX_LINE}
 
     SURPLUS_LINE=$((${TERMINAL_LINES} - ${NOW_CURSOR_LINE}))
 
@@ -305,10 +336,12 @@ function boco() {
 
       __clear_print_data
       __print_data
+
     else
       local HEADER_TEXT
       local HEADER_TEXT_COUNT
       local TERM_LINE
+      local UNSELECT_LINE
 
       HEADER_TEXT="QUERY: ${SEARCH_WORD} "
       HEADER_TEXT_COUNT=${#HEADER_TEXT}
@@ -316,7 +349,8 @@ function boco() {
       TERM_LINE=$((${LIST_NOW_LINE} - ${LIST_SCROLL_POSITION}))
 
       # unselect line
-      if [[ $(__check_include $((${TERM_LINE} + 2)) ${LIST_SELECTED_LINE[@]}) -eq 0 ]];then
+      UNSELECT_LINE="${VIEW_ARRAY_DATA[$((${LIST_NOW_LINE} + 1))]}"
+      if [[ $(__selected_check_in ${UNSELECT_LINE%%:*}) -eq 0 ]];then
         __print_line_position $((${TERM_LINE} + 2)) 1 "${VIEW_ARRAY_DATA[$((${LIST_NOW_LINE} + 1))]}"
       else
         __print_line_position $((${TERM_LINE} + 2)) 2 "${VIEW_ARRAY_DATA[$((${LIST_NOW_LINE} + 1))]}"
@@ -349,14 +383,16 @@ function boco() {
       local HEADER_TEXT
       local HEADER_TEXT_COUNT
       local TERM_LINE
+      local UNSELECT_LINE
 
       HEADER_TEXT="QUERY: ${SEARCH_WORD} "
       HEADER_TEXT_COUNT=${#HEADER_TEXT}
 
       TERM_LINE=$((${LIST_NOW_LINE} - ${LIST_SCROLL_POSITION}))
+      UNSELECT_LINE="${VIEW_ARRAY_DATA[$((${LIST_NOW_LINE} - 1))]}"
 
       # unselect line
-      if [[ $(__check_include ${TERM_LINE} ${LIST_SELECTED_LINE[@]}) -eq 0 ]];then
+      if [[ $(__selected_check_in ${UNSELECT_LINE%%:*}) -eq 0 ]];then
         __print_line_position ${TERM_LINE} 1 "${VIEW_ARRAY_DATA[$((${LIST_NOW_LINE} - 1))]}"
       else
         __print_line_position ${TERM_LINE} 2 "${VIEW_ARRAY_DATA[$((${LIST_NOW_LINE} - 1))]}"
@@ -377,14 +413,11 @@ function boco() {
     exit 1
   }
 
-  # @brief: check if number is included in array
-  function __check_include() {
-    local array_element value=${1}
-    shift
-
-    for array_element;
-    do
-      if [[ $array_element -eq $value ]];then
+  # @brief:
+  #     check if number is included in array
+  function __selected_check_in() {
+    for e in ${LIST_SELECTED_LINE[@]}; do
+      if [[ ${e} -eq ${1} ]];then
         echo 0
         return
       fi
@@ -392,6 +425,24 @@ function boco() {
 
     echo 1
   }
+
+  # @brief: Add element to LIST_SELECTED_LINE
+  function __selected_add() {
+    LIST_SELECTED_LINE=(${LIST_SELECTED_LINE[@]} $1)
+  }
+
+  # @brief: Delete element to LIST_SELECTED_LINE
+  function __selected_del() {
+    local NEW_LIST_SELECTED_LINE=()
+    for e in ${LIST_SELECTED_LINE[@]}; do
+      if [[ ! ${e} -eq ${1} ]];then
+        NEW_LIST_SELECTED_LINE=(${NEW_LIST_SELECTED_LINE[@]} ${e})
+      fi
+    done
+
+    LIST_SELECTED_LINE=(${NEW_LIST_SELECTED_LINE[@]})
+  }
+
 
   ## ----------
   # main
@@ -412,9 +463,7 @@ function boco() {
   local IFS=${OLD_IFS}
 
   # get cursor positon
-  NOW_CURSOR=($(__get_cursor_position))
-  NOW_CURSOR_LINE=${NOW_CURSOR[0]}
-  NOW_CURSOR_COLUMN=${NOW_CURSOR[1]}
+  __get_cursor_position
 
   # get terminal size
   local TERMINAL_LINES=$((${LINES} - 1))
@@ -442,31 +491,61 @@ function boco() {
   while true
   do
     # get input key
-    # TODO: forking zsh/bash
-    read -rsn1 INPUT_KEY </dev/tty
+    case "${SHELL##*/}" in
+      bash*)
+        read -rsn1 INPUT_KEY </dev/tty
+        ;;
+      zsh*)
+        read -r -s -k 1 INPUT_KEY </dev/tty
+        ;;
+    esac
 
     case "${INPUT_KEY}" in
       # hundling escape
       $'\x1b')
-      read -rsn1 -t 0.1 TMP_KEY </dev/tty
-      if [[ "${TMP_KEY}" == "[" ]]; then
-        read -rsn1 -t 0.1 TMP_KEY </dev/tty
-        case "${TMP_KEY}" in
-          # up key
-          "A")
-            __scroll_up
+        case "${SHELL##*/}" in
+          bash*)
+            read -rsn1 -t 0.1 TMP_KEY </dev/tty
             ;;
-
-          # down key
-          "B")
-            __scroll_down
+          zsh*)
+            read -r -s -k 1 -t 0.1 TMP_KEY </dev/tty
             ;;
         esac
-      fi
 
-      # Flush "stdin" with 0.1  sec timeout.
-      read -rsn5 -t 0.1
-      ;;
+        if [[ "${TMP_KEY}" == "[" ]]; then
+          case "${SHELL##*/}" in
+            bash*)
+              read -rsn1 -t 0.1 TMP_KEY </dev/tty
+              ;;
+            zsh*)
+              read -r -s -k 1 -t 0.1 TMP_KEY </dev/tty
+              ;;
+          esac
+
+          case "${TMP_KEY}" in
+            # up key
+            "A")
+              __scroll_up
+              ;;
+
+            # down key
+            "B")
+              __scroll_down
+              ;;
+          esac
+        fi
+
+        # Flush "stdin" with 0.1  sec timeout.
+        case "${SHELL##*/}" in
+          bash*)
+            read -r -n 5 -t 0.1
+            ;;
+          zsh*)
+            read -r -k 5 -t 0.1
+            ;;
+        esac
+
+        ;;
 
       # Delete(Backspace) key
       $'\x7F')
@@ -498,8 +577,11 @@ function boco() {
       $'\x09')
         # add selected line
         local LINE="${VIEW_ARRAY_DATA[${LIST_NOW_LINE}]}"
-        # LIST_SELECTED_LINE=(${LIST_SELECTED_LINE[@]} $((${LINE%%:*} - 1)))
-        LIST_SELECTED_LINE=(${LIST_SELECTED_LINE[@]} ${LINE%%:*})
+        if [[ $(__selected_check_in ${LINE%%:*} ) -eq 0 ]];then
+          __selected_del ${LINE%%:*}
+        else
+          __selected_add ${LINE%%:*}
+        fi
         __clear_print_data
         __update_max_line
         __print_data
@@ -514,20 +596,21 @@ function boco() {
       #   ;;
 
       # input Enter key
-      "")
+      ""|$'\n')
         __clear_print_data
+        local NEW_LIST_SELECTED_LINE
 
         if [[ ${#LIST_SELECTED_LINE} -eq 0 ]];then
           local LINE="${VIEW_ARRAY_DATA[${LIST_NOW_LINE}]}"
           LIST_SELECTED_LINE=(${LINE%%:*})
         fi
 
-        for NO in ${LIST_SELECTED_LINE[@]};
+        IFS=$'\n' NEW_LIST_SELECTED_LINE=($(sort -n <<<"${LIST_SELECTED_LINE[*]}"))
+        for NO in ${NEW_LIST_SELECTED_LINE[@]};
         do
           echo "${ARRAY_DATA[$((${NO} - 1))]}"
         done
         break
-
         ;;
 
       # other key
@@ -541,4 +624,5 @@ function boco() {
     esac
   done
   local IFS=${OLD_IFS}
+  echo ${SEARCH_WORD_ARRAY}
 }
