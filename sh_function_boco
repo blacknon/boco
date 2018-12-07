@@ -163,7 +163,7 @@ function boco() {
       if [[ ${LIST_NOW_LINE} -eq ${i} ]];then
         # print now select line
         __print_line_position $((${x} + 1)) 0 "${VIEW_ARRAY_DATA[${i}]}"
-      elif [[ $(__check_include ${i} ${LIST_SELECTED_LINE[@]}) -eq 0 ]]; then
+      elif [[ $(__check_include $((${i} + 1)) ${LIST_SELECTED_LINE[@]}) -eq 0 ]]; then
         # print selected line
         __print_line_position $((${x} + 1)) 1 "${VIEW_ARRAY_DATA[${i}]}"
       else
@@ -316,7 +316,11 @@ function boco() {
       TERM_LINE=$((${LIST_NOW_LINE} - ${LIST_SCROLL_POSITION}))
 
       # unselect line
-      __print_line_position $((${TERM_LINE} + 2)) 2 "${VIEW_ARRAY_DATA[$((${LIST_NOW_LINE} + 1))]}"
+      if [[ $(__check_include $((${TERM_LINE} + 2)) ${LIST_SELECTED_LINE[@]}) -eq 0 ]];then
+        __print_line_position $((${TERM_LINE} + 2)) 1 "${VIEW_ARRAY_DATA[$((${LIST_NOW_LINE} + 1))]}"
+      else
+        __print_line_position $((${TERM_LINE} + 2)) 2 "${VIEW_ARRAY_DATA[$((${LIST_NOW_LINE} + 1))]}"
+      fi
 
       # select line
       __print_line_position $((${TERM_LINE} + 1)) 0 "${VIEW_ARRAY_DATA[${LIST_NOW_LINE}]}"
@@ -352,7 +356,11 @@ function boco() {
       TERM_LINE=$((${LIST_NOW_LINE} - ${LIST_SCROLL_POSITION}))
 
       # unselect line
-      __print_line_position "${TERM_LINE}" 2 "${VIEW_ARRAY_DATA[$((${LIST_NOW_LINE} - 1))]}"
+      if [[ $(__check_include ${TERM_LINE} ${LIST_SELECTED_LINE[@]}) -eq 0 ]];then
+        __print_line_position ${TERM_LINE} 1 "${VIEW_ARRAY_DATA[$((${LIST_NOW_LINE} - 1))]}"
+      else
+        __print_line_position ${TERM_LINE} 2 "${VIEW_ARRAY_DATA[$((${LIST_NOW_LINE} - 1))]}"
+      fi
 
       # select line
       __print_line_position "$((${TERM_LINE} + 1))" 0 "${VIEW_ARRAY_DATA[${LIST_NOW_LINE}]}"
@@ -490,7 +498,8 @@ function boco() {
       $'\x09')
         # add selected line
         local LINE="${VIEW_ARRAY_DATA[${LIST_NOW_LINE}]}"
-        LIST_SELECTED_LINE=(${LIST_SELECTED_LINE[@]} $((${LINE%%:*} - 1)))
+        # LIST_SELECTED_LINE=(${LIST_SELECTED_LINE[@]} $((${LINE%%:*} - 1)))
+        LIST_SELECTED_LINE=(${LIST_SELECTED_LINE[@]} ${LINE%%:*})
         __clear_print_data
         __update_max_line
         __print_data
