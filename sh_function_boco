@@ -19,9 +19,10 @@ function boco() {
   ## ----------
   # shopt
   ## ----------
-  # set shopt(windows size)
-  shopt -s checkwinsize; (:;:)
-
+  # set shopt(windows size. only bash)
+  if [[ "${SHELL##*/}" == "bash" ]];then
+    shopt -s checkwinsize; (:;:)
+  fi
 
   ## ----------
   # variable
@@ -100,9 +101,8 @@ function boco() {
   # @brief: print data line with ANSI escape code.
   #     __print_line_position
   #          ${1} ... ADD_LINE
-  #          ${2} ... CURSOR_LINE_FLAG(0(true)|1(false))
-  #          ${3} ... SELECTED_LINE_FLAG(0(true)|1(false))
-  #          ${4} ... PRINT_DATA
+  #          ${2} ... CURSOR_LINE_TYPE(0(Current Line)|1(Selected Line)|2(Other))
+  #          ${3} ... PRINT_DATA
   function __print_line_position() {
     # variable
     local ADD_LINE
@@ -110,23 +110,27 @@ function boco() {
     local PRINT_LINE
     local PRINT_DATA
 
-    ADD_LINE="${1}"
-    CURSOR_LINE_FLAG="${2}"
+    ADD_LINE=${1}
+    CURSOR_LINE_TYPE=${2}
     PRINT_LINE=$((${NOW_CURSOR_LINE} + ${ADD_LINE}))
-    SELECTED_LINE_FLAG="${3}"
-    LINE=${4}
+    LINE="${3}"
     PRINT_DATA=${LINE#*:}
 
     # move cursor
     printf "\e["${PRINT_LINE}";0H" >&2
 
     # print line
-    if [ "${CURSOR_LINE_FLAG}" -eq 0 ];then
-      printf "%s\n" "${PRINT_DATA}" >&2
-    else
+    if [[ ${CURSOR_LINE_TYPE} -eq 0 ]];then
       local GREP_CLEAR=$'\E[m\E[K'
       PRINT_DATA="${PRINT_DATA//$(echo ${GREP_CLEAR})/$(echo ${GREP_CLEAR}${ANSI_COLOR_YELLOW}${ANSI_COLOR_BACK_BLUE})}"
       printf "${ANSI_COLOR_YELLOW}${ANSI_COLOR_BACK_BLUE}%s${ANSI_COLOR_NONE}\n" "${PRINT_DATA}" >&2
+
+    elif [[ ${CURSOR_LINE_TYPE} -eq 1 ]]; then
+      local GREP_CLEAR=$'\E[m\E[K'
+      PRINT_DATA="${PRINT_DATA//$(echo ${GREP_CLEAR})/$(echo ${GREP_CLEAR}${ANSI_COLOR_YELLOW}${ANSI_COLOR_BACK_GREEN})}"
+      printf "${ANSI_COLOR_YELLOW}${ANSI_COLOR_BACK_GREEN}%s${ANSI_COLOR_NONE}\n" "${PRINT_DATA}" >&2
+    else
+      printf "%s\n" "${PRINT_DATA}" >&2
     fi
   }
 
@@ -150,16 +154,21 @@ function boco() {
     # print line
     LIST_RANGE_MAX=$((${LIST_SCROLL_POSITION} + ${VIEW_MAX_LINE}))
 
-
-    # @TODO LIST_SELECTED_LINEの番号に入ってる場合、表示を切り替えるようにする
-
     local x=0
     for ((i=${LIST_SCROLL_POSITION};i<${LIST_RANGE_MAX};i++));
     do
-      if [ ${LIST_NOW_LINE} -eq ${i} ];then
-        __print_line_position "$((${x} + 1))" 1 0 "${VIEW_ARRAY_DATA[${i}]}"
+
+      # @TODO 現在の行がLIST_SELECTED_LINEに含まれている場合の分岐
+
+      if [[ ${LIST_NOW_LINE} -eq ${i} ]];then
+        # print now select line
+        __print_line_position $((${x} + 1)) 0 "${VIEW_ARRAY_DATA[${i}]}"
+      elif [[ $(__check_include ${i} ${LIST_SELECTED_LINE[@]}) -eq 0 ]]; then
+        # print selected line
+        __print_line_position $((${x} + 1)) 1 "${VIEW_ARRAY_DATA[${i}]}"
       else
-        __print_line_position "$((${x} + 1))" 0 0 "${VIEW_ARRAY_DATA[${i}]}"
+        # print other line
+        __print_line_position $((${x} + 1)) 2 "${VIEW_ARRAY_DATA[${i}]}"
       fi
       x=$((${x} + 1 ))
     done
@@ -276,6 +285,7 @@ function boco() {
     printf "\e[${NOW_CURSOR_LINE};0H" >&2
   }
 
+  # @brief: scroll up function
   function __scroll_up() {
     LIST_NOW_LINE=$((${LIST_NOW_LINE} - 1))
     if [[ ${LIST_NOW_LINE} -lt 0 ]];then
@@ -306,16 +316,17 @@ function boco() {
       TERM_LINE=$((${LIST_NOW_LINE} - ${LIST_SCROLL_POSITION}))
 
       # unselect line
-      __print_line_position "$((${TERM_LINE} + 2))" 0 0 "${VIEW_ARRAY_DATA[$((${LIST_NOW_LINE} + 1))]}"
+      __print_line_position $((${TERM_LINE} + 2)) 2 "${VIEW_ARRAY_DATA[$((${LIST_NOW_LINE} + 1))]}"
 
       # select line
-      __print_line_position "$((${TERM_LINE} + 1))" 1 0 "${VIEW_ARRAY_DATA[${LIST_NOW_LINE}]}"
+      __print_line_position $((${TERM_LINE} + 1)) 0 "${VIEW_ARRAY_DATA[${LIST_NOW_LINE}]}"
 
       # move cursor
       printf "\e[${NOW_CURSOR_LINE};${HEADER_TEXT_COUNT}H" >&2
     fi
   }
 
+  # @brief: scroll down function
   function __scroll_down() {
     LIST_NOW_LINE=$((${LIST_NOW_LINE} + 1))
     if [[ ${LIST_NOW_LINE} -gt $((${MAX_LINE} - 1)) ]];then
@@ -341,10 +352,10 @@ function boco() {
       TERM_LINE=$((${LIST_NOW_LINE} - ${LIST_SCROLL_POSITION}))
 
       # unselect line
-      __print_line_position "${TERM_LINE}" 0 0 "${VIEW_ARRAY_DATA[$((${LIST_NOW_LINE} - 1))]}"
+      __print_line_position "${TERM_LINE}" 2 "${VIEW_ARRAY_DATA[$((${LIST_NOW_LINE} - 1))]}"
 
       # select line
-      __print_line_position "$((${TERM_LINE} + 1))" 1 0 "${VIEW_ARRAY_DATA[${LIST_NOW_LINE}]}"
+      __print_line_position "$((${TERM_LINE} + 1))" 0 "${VIEW_ARRAY_DATA[${LIST_NOW_LINE}]}"
 
       # move cursor
       printf "\e[${NOW_CURSOR_LINE};${HEADER_TEXT_COUNT}H" >&2
@@ -358,6 +369,21 @@ function boco() {
     exit 1
   }
 
+  # @brief: check if number is included in array
+  function __check_include() {
+    local array_element value=${1}
+    shift
+
+    for array_element;
+    do
+      if [[ $array_element -eq $value ]];then
+        echo 0
+        return
+      fi
+    done
+
+    echo 1
+  }
 
   ## ----------
   # main
@@ -464,7 +490,7 @@ function boco() {
       $'\x09')
         # add selected line
         local LINE="${VIEW_ARRAY_DATA[${LIST_NOW_LINE}]}"
-        LIST_SELECTED_LINE=(${LIST_SELECTED_LINE[@]} ${LINE%%:*})
+        LIST_SELECTED_LINE=(${LIST_SELECTED_LINE[@]} $((${LINE%%:*} - 1)))
         __clear_print_data
         __update_max_line
         __print_data
