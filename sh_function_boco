@@ -99,7 +99,7 @@ function boco() {
         IFS=';' read -r -d R -a CURSOR
         ;;
       zsh*)
-        IFS=';' read -t 1 -s -d R CURSOR
+        IFS=';' read -s -d R CURSOR
         ;;
     esac
 
@@ -257,16 +257,16 @@ function boco() {
       for WORD in ${SEARCH_WORD_ARRAY[*]}; do
         if [[ ${FOR_COUNT} -eq 0 ]];then
           # with number
-          VIEW_ARRAY_STR="$(echo "${VIEW_ARRAY_STR}" | GREP_COLORS='ln=:se=' \grep -F -n --color=always -i ${WORD})"
+          VIEW_ARRAY_STR="$(echo "${VIEW_ARRAY_STR}" | GREP_COLORS='ln=:se=' \grep -a -F -n --color=always -i ${WORD})"
         else
           # without number
-          VIEW_ARRAY_STR="$(echo "${VIEW_ARRAY_STR}" | GREP_COLORS='ln=:se=' \grep -F --color=always -i ${WORD})"
+          VIEW_ARRAY_STR="$(echo "${VIEW_ARRAY_STR}" | GREP_COLORS='ln=:se=' \grep -a -F --color=always -i ${WORD})"
         fi
         FOR_COUNT=$((FOR_COUNT + 1))
       done
     else
       # use regex
-      VIEW_ARRAY_STR="$(echo "${ARRAY_STR}" | GREP_COLORS='ln=:se=' \grep -n -E '.*')"
+      VIEW_ARRAY_STR="$(echo "${ARRAY_STR}" | GREP_COLORS='ln=:se=' \grep -a -n -E '.*')"
     fi
 
     # set VIEW_ARRAY_DATA
@@ -555,7 +555,8 @@ function boco() {
         # 検索ワードの文字数が0より大きい場合、文字を削除して表示を更新する
         if [[ ${SEARCH_WORD_COUNT} -gt 0 ]];then
           local SEARCH_WORD_COUNT=$((${SEARCH_WORD_COUNT} - 1))
-          local SEARCH_WORD=${SEARCH_WORD::${SEARCH_WORD_COUNT}}
+          local SEARCH_WORD=${SEARCH_WORD:0:${SEARCH_WORD_COUNT}}
+
           __update_view_array_data
           __clear_print_data
           __update_max_line
@@ -586,6 +587,10 @@ function boco() {
         __update_max_line
         __print_data
         ;;
+
+
+      # input Ctrl + A key
+      # Selected all view lines.
 
       # input Ctrl + R key
       # Toggle grep mode(plane <-> regex).
