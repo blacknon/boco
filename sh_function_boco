@@ -629,5 +629,4 @@ function boco() {
     esac
   done
   local IFS=${OLD_IFS}
-  echo ${SEARCH_WORD_ARRAY}
 }
