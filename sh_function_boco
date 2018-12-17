@@ -310,7 +310,7 @@ function boco() {
     fi
 
     for ((i=0;i<${VIEW_MAX_LINE};i++)) {
-      echo ""
+      echo "" >&2
     }
 
     printf "\e[${NOW_CURSOR_LINE};0H" >&2
@@ -624,5 +624,4 @@ function boco() {
     esac
   done
   local IFS=${OLD_IFS}
-  echo ${SEARCH_WORD_ARRAY}
 }
