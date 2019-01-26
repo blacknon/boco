@@ -257,10 +257,10 @@ function boco() {
       for WORD in ${SEARCH_WORD_ARRAY[*]}; do
         if [[ ${FOR_COUNT} -eq 0 ]];then
           # with number
-          VIEW_ARRAY_STR="$(echo "${VIEW_ARRAY_STR}" | GREP_COLORS='ln=:se=' \grep -a -F -n --color=always -i ${WORD})"
+          VIEW_ARRAY_STR="$(echo "${VIEW_ARRAY_STR}" | GREP_COLORS='ln=:se=' \grep -a -F -n --color=always -i -- ${WORD})"
         else
           # without number
-          VIEW_ARRAY_STR="$(echo "${VIEW_ARRAY_STR}" | GREP_COLORS='ln=:se=' \grep -a -F --color=always -i ${WORD})"
+          VIEW_ARRAY_STR="$(echo "${VIEW_ARRAY_STR}" | GREP_COLORS='ln=:se=' \grep -a -F --color=always -i -- ${WORD})"
         fi
         FOR_COUNT=$((FOR_COUNT + 1))
       done
