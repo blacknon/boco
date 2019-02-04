@@ -1,7 +1,8 @@
 #!/bin/bash
-# @AUTHOR: Blacknon(blacknon@orebibou.com)
+# @AUTHOR:
+#    Blacknon(blacknon@orebibou.com)
 # @NOTE:
-#    note.
+#    Incremental search tool implemented with Bash function.
 # @TODO:
 #    ・出力行の検索、絞り込み機能の追加
 #    　・正規表現での検索機能
@@ -11,6 +12,11 @@
 #    ・zshでfunctionとして読み込んでも動作するようにする
 #    ・バッファを挟んで、リアルタイムで出力が追加されても対応できるようにする
 #    ・上下キーの使用時では、色が変わる行のみ出力し直すことで対処させる
+#    ・長い行の場合、折返しを発生させず非表示にさせる
+#    　Unicodeの場合、3バイトだけど2文字分の幅として扱う必要があるのでちょっと面倒…
+#    　→ Ascii以外の文字が含まれている場合には、切り落としのための処理を別途行うようにすればいいか…？
+#    　　 処理が重くなるのが嫌だけど…
+
 
 ## ----------
 # function
@@ -50,6 +56,7 @@ function boco() {
   local -r ANSI_COLOR_BACK_GRAY=$'\E[47m'
 
   local -r ANSI_CURSOR_GET=$'\E[6n'
+  local GREP_CLEAR=$'\E[m\E[K'
 
   # local use variables
   local INPUT_KEY # input key code
@@ -135,12 +142,10 @@ function boco() {
 
     # print line
     if [[ ${CURSOR_LINE_TYPE} -eq 0 ]];then
-      local GREP_CLEAR=$'\E[m\E[K'
       PRINT_DATA="${PRINT_DATA//$(echo ${GREP_CLEAR})/$(echo ${GREP_CLEAR}${ANSI_COLOR_YELLOW}${ANSI_COLOR_BACK_BLUE})}"
       printf "${ANSI_COLOR_YELLOW}${ANSI_COLOR_BACK_BLUE}%s${ANSI_COLOR_NONE}\n" "${PRINT_DATA}" >&2
 
     elif [[ ${CURSOR_LINE_TYPE} -eq 1 ]]; then
-      local GREP_CLEAR=$'\E[m\E[K'
       PRINT_DATA="${PRINT_DATA//$(echo ${GREP_CLEAR})/$(echo ${GREP_CLEAR}${ANSI_COLOR_YELLOW}${ANSI_COLOR_BACK_GREEN})}"
       printf "${ANSI_COLOR_YELLOW}${ANSI_COLOR_BACK_GREEN}%s${ANSI_COLOR_NONE}\n" "${PRINT_DATA}" >&2
     else
@@ -501,8 +506,8 @@ function boco() {
     esac
 
     case "${INPUT_KEY}" in
-      # hundling escape
-      $'\x1b')
+      # hundling Escape(\x1B)
+      $'\x1B')
         case "${SHELL##*/}" in
           bash*)
             read -rsn1 -t 0.1 TMP_KEY </dev/tty
@@ -547,7 +552,7 @@ function boco() {
 
         ;;
 
-      # Delete(Backspace) key
+      # Delete(Backspace(\x7F)) key
       $'\x7F')
         # get search word count
         local SEARCH_WORD_COUNT=${#SEARCH_WORD}
@@ -573,7 +578,7 @@ function boco() {
         __print_data
         ;;
 
-      # input Tab key
+      # input Tab key(\x09)
       # Toggle multi select.
       $'\x09')
         # add selected line
