@@ -75,7 +75,6 @@ function boco() {
 
   # env
   local -r OLD_IFS=${IFS}
-  local GREP_COLORS='ln=:se='
 
   # cmd
   local CMD_GREP
