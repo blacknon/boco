@@ -23,6 +23,17 @@
 ## ----------
 function boco() {
   ## ----------
+  # getopts
+  ## ----------
+  while getopts p OPT
+  do
+    case $OPT in
+      "p" ) local FLG_P="TRUE" ;;
+    esac
+  done
+
+
+  ## ----------
   # shopt/setopt
   ## ----------
   # set shopt(windows size. only bash)
@@ -455,6 +466,11 @@ function boco() {
   # set trap
   trap __trap_2 2
 
+  # check -p option
+  if [[ "${FLG_P}" != "TRUE" ]];then
+    printf '\033[?7l'
+  fi
+
   # get data from stdin or file.
   if [ -p /dev/stdin ];then
     DATA="$(</dev/stdin)"
@@ -633,5 +649,11 @@ function boco() {
         ;;
     esac
   done
+
+  # check -p option
+  if [[ "${FLG_P}" != "TRUE" ]];then
+    printf '\033[?7h'
+  fi
+
   local IFS=${OLD_IFS}
 }
