@@ -27,11 +27,10 @@ function boco() {
     esac
   done
 
-
   ## ----------
   # shopt/setopt
   ## ----------
-  # set shopt(windows size. only bash)
+  # set shopt(get windows size.)
   case "${SHELL##*/}" in
     bash*) shopt -s checkwinsize; (:;:) ;;
     zsh*)  setopt localoptions ksharrays ;;
@@ -40,7 +39,7 @@ function boco() {
   ## ----------
   # variable
   ## ----------
-  # ANSI Escape
+  # ANSI Escape(Color)
   local -r ANSI_COLOR_NONE=$'\E[0m'
   local -r ANSI_COLOR_RED=$'\E[0;31m'
   local -r ANSI_COLOR_GREEN=$'\E[0;32m'
@@ -57,6 +56,7 @@ function boco() {
   local -r ANSI_COLOR_BACK_CYAN=$'\E[46m'
   local -r ANSI_COLOR_BACK_GRAY=$'\E[47m'
 
+  # ANSI Escape(Other)
   local -r ANSI_CURSOR_GET=$'\E[6n'
   local GREP_CLEAR=$'\E[m\E[K'
 
