@@ -12,11 +12,6 @@
 #    ・zshでfunctionとして読み込んでも動作するようにする
 #    ・バッファを挟んで、リアルタイムで出力が追加されても対応できるようにする
 #    ・上下キーの使用時では、色が変わる行のみ出力し直すことで対処させる
-#    ・長い行の場合、折返しを発生させず非表示にさせる
-#    　Unicodeの場合、3バイトだけど2文字分の幅として扱う必要があるのでちょっと面倒…
-#    　→ Ascii以外の文字が含まれている場合には、切り落としのための処理を別途行うようにすればいいか…？
-#    　　 処理が重くなるのが嫌だけど…
-
 
 ## ----------
 # function
@@ -38,12 +33,8 @@ function boco() {
   ## ----------
   # set shopt(windows size. only bash)
   case "${SHELL##*/}" in
-    bash*)
-      shopt -s checkwinsize; (:;:)
-      ;;
-    zsh*)
-      setopt localoptions ksharrays
-      ;;
+    bash*) shopt -s checkwinsize; (:;:) ;;
+    zsh*)  setopt localoptions ksharrays ;;
   esac
 
   ## ----------
@@ -112,12 +103,8 @@ function boco() {
     printf "${ANSI_CURSOR_GET}" > /dev/tty
 
     case "${SHELL##*/}" in
-      bash*)
-        IFS=';' read -r -d R -a CURSOR
-        ;;
-      zsh*)
-        IFS=';' read -s -d R CURSOR
-        ;;
+      bash*) IFS=';' read -r -d R -a CURSOR ;;
+      zsh*)  IFS=';' read -s -d R CURSOR ;;
     esac
 
     IFS=$'\n'
@@ -153,11 +140,11 @@ function boco() {
     # print line
     if [[ ${CURSOR_LINE_TYPE} -eq 0 ]];then
       PRINT_DATA="${PRINT_DATA//$(echo ${GREP_CLEAR})/$(echo ${GREP_CLEAR}${ANSI_COLOR_YELLOW}${ANSI_COLOR_BACK_BLUE})}"
-      printf "${ANSI_COLOR_YELLOW}${ANSI_COLOR_BACK_BLUE}%s${ANSI_COLOR_NONE}\n" "${PRINT_DATA}" >&2
+      printf "${ANSI_COLOR_YELLOW}${ANSI_COLOR_BACK_BLUE}"'%s'"${ANSI_COLOR_NONE}\n" "${PRINT_DATA}" >&2
 
     elif [[ ${CURSOR_LINE_TYPE} -eq 1 ]]; then
       PRINT_DATA="${PRINT_DATA//$(echo ${GREP_CLEAR})/$(echo ${GREP_CLEAR}${ANSI_COLOR_YELLOW}${ANSI_COLOR_BACK_GREEN})}"
-      printf "${ANSI_COLOR_YELLOW}${ANSI_COLOR_BACK_GREEN}%s${ANSI_COLOR_NONE}\n" "${PRINT_DATA}" >&2
+      printf "${ANSI_COLOR_YELLOW}${ANSI_COLOR_BACK_GREEN}"'%s'"${ANSI_COLOR_NONE}\n" "${PRINT_DATA}" >&2
     else
       printf "%s\n" "${PRINT_DATA}" >&2
     fi
@@ -233,12 +220,8 @@ function boco() {
   #     update view array data.
   function __update_view_array_data() {
     case "${SHELL##*/}" in
-      bash*)
-        shopt -s checkwinsize; (:;:)
-        ;;
-      zsh*)
-        setopt localoptions ksharrays
-        ;;
+      bash*) shopt -s checkwinsize; (:;:) ;;
+      zsh*)  setopt localoptions ksharrays ;;
     esac
     local SEARCH_WORD_COUNT
     local ARRAY_STR
@@ -257,12 +240,8 @@ function boco() {
     if [[ ${SEARCH_WORD_COUNT} -gt 0 ]];then
       # split string at space
       case "${SHELL##*/}" in
-        bash*)
-          IFS=" " read -r -a SEARCH_WORD_ARRAY <<< "${SEARCH_WORD}"
-          ;;
-        zsh*)
-          IFS=" " read -r -A SEARCH_WORD_ARRAY <<< "${SEARCH_WORD}"
-          ;;
+        bash*) IFS=" " read -r -a SEARCH_WORD_ARRAY <<< "${SEARCH_WORD}" ;;
+        zsh*)  IFS=" " read -r -A SEARCH_WORD_ARRAY <<< "${SEARCH_WORD}" ;;
       esac
 
       IFS=$'\n'
@@ -512,57 +491,36 @@ function boco() {
   do
     # get input key
     case "${SHELL##*/}" in
-      bash*)
-        read -rsn1 INPUT_KEY </dev/tty
-        ;;
-      zsh*)
-        read -r -s -k 1 INPUT_KEY </dev/tty
-        ;;
+      bash*) read -rsn1 INPUT_KEY </dev/tty ;;
+      zsh*)  read -r -s -k 1 INPUT_KEY </dev/tty ;;
     esac
 
     case "${INPUT_KEY}" in
       # hundling Escape(\x1B)
       $'\x1B')
         case "${SHELL##*/}" in
-          bash*)
-            read -rsn1 -t 0.1 TMP_KEY </dev/tty
-            ;;
-          zsh*)
-            read -r -s -k 1 -t 0.1 TMP_KEY </dev/tty
-            ;;
+          bash*) read -rsn1 -t 0.1 TMP_KEY </dev/tty ;;
+          zsh*)  read -r -s -k 1 -t 0.1 TMP_KEY </dev/tty ;;
         esac
 
         if [[ "${TMP_KEY}" == "[" ]]; then
           case "${SHELL##*/}" in
-            bash*)
-              read -rsn1 -t 0.1 TMP_KEY </dev/tty
-              ;;
-            zsh*)
-              read -r -s -k 1 -t 0.1 TMP_KEY </dev/tty
-              ;;
+            bash*) read -rsn1 -t 0.1 TMP_KEY </dev/tty ;;
+            zsh*)  read -r -s -k 1 -t 0.1 TMP_KEY </dev/tty ;;
           esac
 
           case "${TMP_KEY}" in
             # up key
-            "A")
-              __scroll_up
-              ;;
-
+            "A") __scroll_up ;;
             # down key
-            "B")
-              __scroll_down
-              ;;
+            "B") __scroll_down ;;
           esac
         fi
 
         # Flush "stdin" with 0.1  sec timeout.
         case "${SHELL##*/}" in
-          bash*)
-            read -r -n 5 -t 0.1
-            ;;
-          zsh*)
-            read -r -k 5 -t 0.1
-            ;;
+          bash*) read -r -n 5 -t 0.1 ;;
+          zsh*)  read -r -k 5 -t 0.1 ;;
         esac
 
         ;;
