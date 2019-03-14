@@ -66,7 +66,7 @@ function boco() {
   local DATA # Get stdin or file DATA
   local ARRAY_DATA # Data to Array(Original)
   local VIEW_ARRAY_DATA # Data to Array(Refine Data)
-  local NOW_CURSOR # Now cursor position in terminal
+  # local NOW_CURSOR # Now cursor position in terminal
   local NOW_CURSOR_LINE # Now cursor position in terminal(line)
   local LIST_NOW_LINE # now cursor line (in boco list)
   local LIST_SELECTED_LINE # now selected line (in boco list. array)
@@ -87,12 +87,11 @@ function boco() {
 
   # @brief:
   #     get now cursor positon in terminal.
-  # @return:
-  #     NOW_CURSOR_ROW NOW_CURSOR_COLUMN
+  # @return: NOW_CURSOR_LINE
   function __get_cursor_position() {
     # variable
     local OLD_STTY
-    local NOW_CURSOR
+    local CURSOR
 
     # move tty
     exec < /dev/tty
@@ -201,7 +200,7 @@ function boco() {
     printf "\e[${NOW_CURSOR_LINE};0H" >&2
 
     # clear line
-    echo $'\e[2K' $'\e[1A' >&2
+    echo $'\e[2K'$'\e[1A' >&2
 
     for ((i=0;i<${VIEW_MAX_LINE};i++));
     do
