@@ -61,17 +61,17 @@ boco() {
   local GREP_CLEAR=$'\E[m\E[K'
 
   # local use variables
-  local input_key # input key code
-  local tmp_key # input key code(2nd)
+  local input # input key code
+  local tmp # input key code(2nd)
   local data # Get stdin or file data
-  local array_data # data to Array(Original)
-  local view_array_data # data to Array(Refine data)
+  local array # data to Array(Original)
+  local view_array # data to Array(Refine data)
   local now_cursor_line # Now cursor position in terminal(line)
-  local list_now_line # now cursor line (in boco list)
-  local list_selected_line # now selected line (in boco list. array)
+  local now_list_line # now cursor line (in boco list)
+  local selected_line # now selected line (in boco list. array)
   local max_line # VIEW_ARRAY_max_line
   local view_max_line # max line in terminal
-  local list_scroll_position # boco list scroll position (1st line)
+  local scroll_position # boco list scroll position (1st line)
   local surplus_line
 
   # env
@@ -167,15 +167,15 @@ boco() {
     printf "${header_text}\n" >&2
 
     # print line
-    list_range_max=$((${list_scroll_position} + ${view_max_line}))
+    list_range_max=$((${scroll_position} + ${view_max_line}))
 
     local x=0
-    for ((i=${list_scroll_position};i<${list_range_max};i++));
+    for ((i=${scroll_position};i<${list_range_max};i++));
     do
       # テキストを変数に代入
       list_line="${view_array_data[${i}]}"
 
-      if [[ ${list_now_line} -eq ${i} ]];then
+      if [[ ${now_list_line} -eq ${i} ]];then
         # print now select line
         __print_line_position $((${x} + 1)) 0 "${list_line}"
       elif [[ $(__selected_check_in ${list_line%%:*}) -eq 0 ]]; then
@@ -216,7 +216,7 @@ boco() {
 
   # @brief:
   #     update view array data.
-  __update_view_array_data() {
+  __update_view_array() {
     case "${SHELL##*/}" in
       bash*) shopt -s checkwinsize; (:;:) ;;
       zsh*)  setopt localoptions ksharrays ;;
@@ -289,16 +289,16 @@ boco() {
       now_cursor_line=$((${terminal_lines} - ${view_max_line}))
     fi
 
-    if [[ ${max_line} -le ${list_scroll_position} ]];then
-      list_scroll_position=$((${max_line} - 1))
+    if [[ ${max_line} -le ${scroll_position} ]];then
+      scroll_position=$((${max_line} - 1))
 
-      if [[ ${list_scroll_position} -lt 0 ]];then
-        list_scroll_position=0
+      if [[ ${scroll_position} -lt 0 ]];then
+        scroll_position=0
       fi
     fi
 
-    if [[ ${list_now_line} -ge $((${view_max_line})) ]];then
-      list_now_line=$((${view_max_line} - 1))
+    if [[ ${now_list_line} -ge $((${view_max_line})) ]];then
+      now_list_line=$((${view_max_line} - 1))
     fi
 
     for ((i=0;i<${view_max_line};i++)) {
@@ -310,20 +310,20 @@ boco() {
 
   # @brief: scroll up function
   __scroll_up() {
-    list_now_line=$((${list_now_line} - 1))
-    if [[ ${list_now_line} -lt 0 ]];then
-      list_now_line=0
+    now_list_line=$((${now_list_line} - 1))
+    if [[ ${now_list_line} -lt 0 ]];then
+      now_list_line=0
       return
     fi
 
     # scroll up
-    list_range_min=${list_scroll_position}
-    if [[ ${list_now_line} -lt ${list_range_min} ]];then
+    list_range_min=${scroll_position}
+    if [[ ${now_list_line} -lt ${list_range_min} ]];then
       # if scroll up
-      list_scroll_position=$((${list_scroll_position} - 1))
+      scroll_position=$((${scroll_position} - 1))
 
-      if [[ ${list_scroll_position} -lt 0 ]];then
-        list_scroll_position=0
+      if [[ ${scroll_position} -lt 0 ]];then
+        scroll_position=0
       fi
 
       __clear_print_data
@@ -338,18 +338,18 @@ boco() {
       header_text="QUERY: ${search_word} "
       header_text_count=${#header_text}
 
-      term_line=$((${list_now_line} - ${list_scroll_position}))
+      term_line=$((${now_list_line} - ${scroll_position}))
 
       # unselect line
-      unselect_line="${view_array_data[$((${list_now_line} + 1))]}"
+      unselect_line="${view_array_data[$((${now_list_line} + 1))]}"
       if [[ $(__selected_check_in ${unselect_line%%:*}) -eq 0 ]];then
-        __print_line_position $((${term_line} + 2)) 1 "${view_array_data[$((${list_now_line} + 1))]}"
+        __print_line_position $((${term_line} + 2)) 1 "${view_array_data[$((${now_list_line} + 1))]}"
       else
-        __print_line_position $((${term_line} + 2)) 2 "${view_array_data[$((${list_now_line} + 1))]}"
+        __print_line_position $((${term_line} + 2)) 2 "${view_array_data[$((${now_list_line} + 1))]}"
       fi
 
       # select line
-      __print_line_position $((${term_line} + 1)) 0 "${view_array_data[${list_now_line}]}"
+      __print_line_position $((${term_line} + 1)) 0 "${view_array_data[${now_list_line}]}"
 
       # move cursor
       printf "\e[${now_cursor_line};${header_text_count}H" >&2
@@ -358,17 +358,17 @@ boco() {
 
   # @brief: scroll down function
   __scroll_down() {
-    list_now_line=$((${list_now_line} + 1))
-    if [[ ${list_now_line} -gt $((${max_line} - 1)) ]];then
-      list_now_line=$((${max_line} - 1))
+    now_list_line=$((${now_list_line} + 1))
+    if [[ ${now_list_line} -gt $((${max_line} - 1)) ]];then
+      now_list_line=$((${max_line} - 1))
       return
     fi
 
     # scroll down
-    local list_range_max=$((${list_scroll_position} + ${view_max_line}))
-    if [[ ${list_now_line} -ge ${list_range_max} ]];then
+    local list_range_max=$((${scroll_position} + ${view_max_line}))
+    if [[ ${now_list_line} -ge ${list_range_max} ]];then
       # if scroll down
-      list_scroll_position=$((${list_scroll_position} + 1))
+      scroll_position=$((${scroll_position} + 1))
       __clear_print_data
       __print_data
     else
@@ -380,18 +380,18 @@ boco() {
       header_text="QUERY: ${search_word} "
       header_text_count=${#header_text}
 
-      term_line=$((${list_now_line} - ${list_scroll_position}))
-      unselect_line="${view_array_data[$((${list_now_line} - 1))]}"
+      term_line=$((${now_list_line} - ${scroll_position}))
+      unselect_line="${view_array_data[$((${now_list_line} - 1))]}"
 
       # unselect line
       if [[ $(__selected_check_in ${unselect_line%%:*}) -eq 0 ]];then
-        __print_line_position ${term_line} 1 "${view_array_data[$((${list_now_line} - 1))]}"
+        __print_line_position ${term_line} 1 "${view_array_data[$((${now_list_line} - 1))]}"
       else
-        __print_line_position ${term_line} 2 "${view_array_data[$((${list_now_line} - 1))]}"
+        __print_line_position ${term_line} 2 "${view_array_data[$((${now_list_line} - 1))]}"
       fi
 
       # select line
-      __print_line_position "$((${term_line} + 1))" 0 "${view_array_data[${list_now_line}]}"
+      __print_line_position "$((${term_line} + 1))" 0 "${view_array_data[${now_list_line}]}"
 
       # move cursor
       printf "\e[${now_cursor_line};${header_text_count}H" >&2
@@ -408,7 +408,7 @@ boco() {
   # @brief:
   #     check if number is included in array
   __selected_check_in() {
-    for e in ${list_selected_line[@]}; do
+    for e in ${selected_line[@]}; do
       if [[ ${e} -eq ${1} ]];then
         echo 0
         return
@@ -418,21 +418,21 @@ boco() {
     echo 1
   }
 
-  # @brief: Add element to list_selected_line
+  # @brief: Add element to selected_line
   __selected_add() {
-    list_selected_line=(${list_selected_line[@]} $1)
+    selected_line=(${selected_line[@]} $1)
   }
 
-  # @brief: Delete element to list_selected_line
+  # @brief: Delete element to selected_line
   __selected_del() {
-    local new_list_selected_line=()
-    for e in ${list_selected_line[@]}; do
+    local new_selected_line=()
+    for e in ${selected_line[@]}; do
       if [[ ! ${e} -eq ${1} ]];then
-        new_list_selected_line=(${new_list_selected_line[@]} ${e})
+        new_selected_line=(${new_selected_line[@]} ${e})
       fi
     done
 
-    list_selected_line=(${new_list_selected_line[@]})
+    selected_line=(${new_selected_line[@]})
   }
 
 
@@ -466,16 +466,16 @@ boco() {
   local terminal_lines=$((${LINES} - 1))
   local terminal_columns=$((${COLUMNS} - 1))
 
-  # update view_array_data
-  __update_view_array_data
+  # update view_array
+  __update_view_array
 
   # set max_line & VIEW_max_line
   __update_max_line
 
-  # set list_now_line, list_selected_line
-  list_now_line=0
-  list_scroll_position=0
-  list_selected_line=()
+  # set now_list_line, selected_line
+  now_list_line=0
+  scroll_position=0
+  selected_line=()
 
   # set search_word
   local search_word=""
@@ -489,25 +489,25 @@ boco() {
   do
     # get input key
     case "${SHELL##*/}" in
-      bash*) read -rsn1 input_key </dev/tty ;;
-      zsh*)  read -r -s -k 1 input_key </dev/tty ;;
+      bash*) read -rsn1 input </dev/tty ;;
+      zsh*)  read -r -s -k 1 input </dev/tty ;;
     esac
 
-    case "${input_key}" in
+    case "${input}" in
       # hundling Escape(\x1B)
       $'\x1B')
         case "${SHELL##*/}" in
-          bash*) read -rsn1 -t 0.1 tmp_key </dev/tty ;;
-          zsh*)  read -r -s -k 1 -t 0.1 tmp_key </dev/tty ;;
+          bash*) read -rsn1 -t 0.1 tmp </dev/tty ;;
+          zsh*)  read -r -s -k 1 -t 0.1 tmp </dev/tty ;;
         esac
 
-        if [[ "${tmp_key}" == "[" ]]; then
+        if [[ "${tmp}" == "[" ]]; then
           case "${SHELL##*/}" in
-            bash*) read -rsn1 -t 0.1 tmp_key </dev/tty ;;
-            zsh*)  read -r -s -k 1 -t 0.1 tmp_key </dev/tty ;;
+            bash*) read -rsn1 -t 0.1 tmp </dev/tty ;;
+            zsh*)  read -r -s -k 1 -t 0.1 tmp </dev/tty ;;
           esac
 
-          case "${tmp_key}" in
+          case "${tmp}" in
             # up key
             "A") __scroll_up ;;
             # down key
@@ -533,7 +533,7 @@ boco() {
           local search_word_count=$((${search_word_count} - 1))
           local search_word=${search_word:0:${search_word_count}}
 
-          __update_view_array_data
+          __update_view_array
           __clear_print_data
           __update_max_line
           __print_data
@@ -542,8 +542,8 @@ boco() {
 
       # input Space Key
       " ")
-        search_word=${search_word}${input_key}
-        __update_view_array_data
+        search_word=${search_word}${input}
+        __update_view_array
         __clear_print_data
         __update_max_line
         __print_data
@@ -553,7 +553,7 @@ boco() {
       # Toggle multi select.
       $'\x09')
         # add selected line
-        local line="${view_array_data[${list_now_line}]}"
+        local line="${view_array_data[${now_list_line}]}"
         if [[ $(__selected_check_in ${line%%:*} ) -eq 0 ]];then
           __selected_del ${line%%:*}
         else
@@ -579,15 +579,15 @@ boco() {
       # input Enter key
       ""|$'\n')
         __clear_print_data
-        local new_list_selected_line
+        local new_selected_line
 
-        if [[ ${#list_selected_line} -eq 0 ]];then
-          local line="${view_array_data[${list_now_line}]}"
-          list_selected_line=(${line%%:*})
+        if [[ ${#selected_line} -eq 0 ]];then
+          local line="${view_array_data[${now_list_line}]}"
+          selected_line=(${line%%:*})
         fi
 
-        IFS=$'\n' new_list_selected_line=($(sort -n <<<"${list_selected_line[*]}"))
-        for NO in ${new_list_selected_line[@]};
+        IFS=$'\n' new_selected_line=($(sort -n <<<"${selected_line[*]}"))
+        for NO in ${new_selected_line[@]};
         do
           echo "${array_data[$((${NO} - 1))]}"
         done
@@ -596,8 +596,8 @@ boco() {
 
       # other key
       *)
-        search_word=${search_word}${input_key}
-        __update_view_array_data
+        search_word=${search_word}${input}
+        __update_view_array
         __clear_print_data
         __update_max_line
         __print_data
