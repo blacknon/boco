@@ -272,19 +272,20 @@ boco() {
     max_line="${#view_array_data[@]}"
     view_max_line=${max_line}
 
-    surplus_line=$((${terminal_lines} - ${now_cursor_line}))
-
+    # ターミナルの残り行数を見ていたが、固定にするためコメントアウト
+    # surplus_line=$((${terminal_lines} - ${now_cursor_line}))
     # if [ surplus_line <= (terminal_lines/2) ]
-    if [[ ${surplus_line} -le $((${terminal_lines} / 2)) ]];then
-      surplus_line=$((${terminal_lines} / 2))
-    fi
+    # if [[ ${surplus_line} -le $((${terminal_lines} / 2)) ]];then
+    #   surplus_line=$((${terminal_lines} / 2))
+    # fi
 
-    # if [ surplus_line <= max_line ]
+    # 出力行数(20で固定)
+    surplus_line=20
+
     if [[ ${surplus_line} -le ${view_max_line} ]];then
       view_max_line="${surplus_line}"
     fi
 
-    # if [ $((${terminal_lines} - ${max_line})) <= now_cursor_line ]
     if [[ $((${terminal_lines} - ${view_max_line})) -le ${now_cursor_line} ]];then
       now_cursor_line=$((${terminal_lines} - ${view_max_line}))
     fi
@@ -563,7 +564,6 @@ boco() {
         __update_max_line
         __print_data
         ;;
-
 
       # input Ctrl + A key
       # Selected all view lines.
