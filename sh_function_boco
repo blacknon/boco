@@ -11,31 +11,11 @@
 #    ・行表示の処理を、最低限の画面更新にしてパフォーマンスを改善する
 #    ・zshでfunctionとして読み込んでも動作するようにする
 #    ・バッファを挟んで、リアルタイムで出力が追加されても対応できるようにする
-#    ・上下キーの使用時では、色が変わる行のみ出力し直すことで対処させる
 
 ## ----------
 # function
 ## ----------
 boco() {
-  ## ----------
-  # getopts
-  ## ----------
-  while getopts p opt
-  do
-    case ${opt} in
-      "p" ) local flg_p="TRUE" ;;
-    esac
-  done
-
-  ## ----------
-  # shopt/setopt
-  ## ----------
-  # set shopt(get windows size.)
-  case "${SHELL##*/}" in
-    bash*) shopt -s checkwinsize; (:;:) ;;
-    zsh*)  setopt localoptions ksharrays ;;
-  esac
-
   ## ----------
   # variable
   ## ----------
@@ -74,6 +54,10 @@ boco() {
   local scroll_position # boco list scroll position (1st line)
   local surplus_line
 
+  # option
+  local flg_p
+  local search_word
+
   # env
   local -r OLD_IFS=${IFS}
 
@@ -81,9 +65,37 @@ boco() {
   local cmd_grep
 
   ## ----------
+  # getopts
+  ## ----------
+  __boco_usage() {
+    echo "usage:"
+    echo " -p               ... not print control character"
+    echo " -q {search_word} ... search word"
+    exit 1
+  }
+
+  while getopts :pq: OPT
+  do
+    case ${OPT} in
+      p ) flg_p="TRUE" ;;
+      q ) search_word="${OPTARG}";;
+      :|\?) __boco_usage;;
+    esac
+  done
+  shift $((OPTIND - 1))
+
+  ## ----------
+  # shopt/setopt
+  ## ----------
+  # set shopt(get windows size.)
+  case "${SHELL##*/}" in
+    bash*) shopt -s checkwinsize; (:;:) ;;
+    zsh*)  setopt localoptions ksharrays ;;
+  esac
+
+  ## ----------
   # function
   ## ----------
-
   # @brief:
   #     get now cursor positon in terminal.
   # @return: now_cursor_line
@@ -477,9 +489,6 @@ boco() {
   now_list_line=0
   scroll_position=0
   selected_line=()
-
-  # set search_word
-  local search_word=""
 
   # first print out
   __print_data
