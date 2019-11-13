@@ -13,6 +13,12 @@ Bash Shell Function's Fuzzy Finder.
 - grep
 - sort
 
+## Install
+
+    cd $HOME
+    git clone git@github.com:blacknon/boco.git
+    echo "source ~/boco/sh_function_boco" >> ~/.bashrc
+
 ## Usage
 
 ### Simple select
@@ -21,12 +27,9 @@ Basic usage is the method of selecting from the standard input received from the
 
     echo {a..f}{01..03} | xargs -n3 | boco
 
-
 ### History select
 
 Can make history selection like peco or fzf. Load the following function.
-
-`TODO: $HISTTIMEFORMATの有無に応じてhistoryの加工方法を切り替える`
 
     __history_selection() {
       # 逆順に出力するコマンド
@@ -55,7 +58,11 @@ Can make history selection like peco or fzf. Load the following function.
           CURSOR=${#BUFFER} # カーソル位置を移動
           ;;
         bash*)
-          local buffer=$(history | sed -r 's/^[ 0-9]+:* *[0-9]+ [0-9]{2}:[0-9]{2}:[0-9]{2} *:* *//g' | eval ${reverse} | awk '!a[$0]++' |eval ${selecter})
+          if [[ -n ${HISTTIMEFORMAT} ]];then # $HISTTIMEFORMATに値が入っている場合 => history番号とタイムスタンプを削除する
+            local buffer=$(history | sed -r 's/^[ 0-9]+:* *[0-9]+ [0-9]{2}:[0-9]{2}:[0-9]{2} *:* *//g' | eval ${reverse} | awk '!a[$0]++' |eval ${selecter})
+          else # $HISTTIMEFORMATに値が入ってない(空っぽ)場合 => history番号だけ削除する
+            local buffer=$(history | sed -r 's/^ *[0-9*]+ +//g' | eval ${reverse} | awk '!a[$0]++' | eval ${selecter})
+          fi
           READLINE_LINE="${buffer}" # 入力中のコマンドの内容を上書き
           READLINE_POINT=${#READLINE_LINE} # カーソル位置を移動
           ;;
@@ -69,8 +76,9 @@ Can make history selection like peco or fzf. Load the following function.
 
 ### Use by ssh connection destination
 
-TODO: ssh接続先で使用する方法について記述する
+Since boco is a shell function, it can be read directly from a local file to the ssh connection destination.
 
+    ssh -t uesugi@192.168.56.51 'bash --rcfile <(echo '$(cat /path/to/boco/sh_function_boco|base64)'|base64 -d)'
 
 
 
