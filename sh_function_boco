@@ -415,7 +415,7 @@ boco() {
   __trap_2() {
     __clear_print_data
     local IFS=${OLD_IFS}
-    exit 1
+    return 1
   }
 
   # @brief:
@@ -453,7 +453,7 @@ boco() {
   # main
   ## ----------
   # set trap
-  trap __trap_2 2
+  trap '__trap_2;trap - 2;return 1;' 2
 
   # check -p option
   if [[ "${flg_p}" != "TRUE" ]];then
