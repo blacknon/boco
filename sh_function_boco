@@ -71,7 +71,7 @@ boco() {
     echo "usage:"
     echo " -p               ... not print control character"
     echo " -q {search_word} ... search word"
-    exit 1
+    return 1
   }
 
   while getopts :pq: OPT
@@ -79,7 +79,7 @@ boco() {
     case ${OPT} in
       p ) flg_p="TRUE" ;;
       q ) search_word="${OPTARG}";;
-      :|\?) __boco_usage;;
+      :|\?) __boco_usage;return 1;;
     esac
   done
   shift $((OPTIND - 1))
