@@ -29,6 +29,11 @@ Basic usage is the method of selecting from the standard input received from the
 
 ### History select
 
+<p align="center">
+<img src="./img/boco_history.gif" />
+</p>
+
+
 Can make history selection like peco or fzf. Load the following function.
 
     __history_selection() {
@@ -76,12 +81,11 @@ Can make history selection like peco or fzf. Load the following function.
 
 ### Use by ssh connection destination
 
+<p align="center">
+<img src="./img/boco_ssh.gif" />
+</p>
+
 Since boco is a shell function, it can be read directly from a local file to the ssh connection destination.
 
-    ssh -t uesugi@192.168.56.51 'bash --rcfile <(echo '$(cat /path/to/boco/sh_function_boco|base64)'|base64 -d)'
-
-
-
-
-
+    ssh -t user@hostname 'bash --rcfile <(echo '$(cat /path/to/boco/sh_function_boco|base64)'|base64 -d)'
 
