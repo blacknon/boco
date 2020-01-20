@@ -8,13 +8,14 @@
 # @NOTE:
 #    Incremental search tool implemented with Bash function.
 # @TODO:
-#    ・出力行の検索、絞り込み機能の追加
-#    　・正規表現での検索機能
-#    　・Ctrl+Rで切り替えできるようにする
-#    ・複数行の選択機能(Tabキー)
-#    ・行表示の処理を、最低限の画面更新にしてパフォーマンスを改善する
-#    ・zshでfunctionとして読み込んでも動作するようにする
-#    ・バッファを挟んで、リアルタイムで出力が追加されても対応できるようにする
+#    - 出力行の検索、絞り込み機能の追加
+#    　- 正規表現での検索機能
+#    　- Ctrl+Rで切り替えできるようにする
+#    - 行表示の処理を、最低限の画面更新にしてパフォーマンスを改善する
+#    - バッファを挟んで、リアルタイムで出力が追加されても対応できるようにする
+#    - optionでTabで下移動モード(非複数選択モード)への切り替えを行えるようにする
+#      - 参考url(completeができるようにする)
+#        - https://github.com/pindexis/qfc/blob/master/bin/qfc.sh
 
 ## ----------
 # function
@@ -75,7 +76,7 @@ boco() {
     echo "usage:"
     echo " -p               ... not print control character"
     echo " -q {search_word} ... search word"
-    exit 1
+    return 1
   }
 
   while getopts :pq: OPT
@@ -83,7 +84,7 @@ boco() {
     case ${OPT} in
       p ) flg_p="TRUE" ;;
       q ) search_word="${OPTARG}";;
-      :|\?) __boco_usage;;
+      :|\?) __boco_usage;return 1;;
     esac
   done
   shift $((OPTIND - 1))
@@ -419,7 +420,7 @@ boco() {
   __trap_2() {
     __clear_print_data
     local IFS=${OLD_IFS}
-    exit 1
+    return 1
   }
 
   # @brief:
@@ -457,7 +458,7 @@ boco() {
   # main
   ## ----------
   # set trap
-  trap __trap_2 2
+  trap '__trap_2;trap - 2;return 1;' 2
 
   # check -p option
   if [[ "${flg_p}" != "TRUE" ]];then
