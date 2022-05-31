@@ -17,7 +17,7 @@ Bash Shell Function's Fuzzy Finder.
 
     cd $HOME
     git clone git@github.com:blacknon/boco.git
-    echo "source ~/boco/sh_function_boco" >> ~/.bashrc
+    echo "source ~/boco/boco.bash" >> ~/.bashrc
 
 ## Usage
 
@@ -87,5 +87,4 @@ Can make history selection like peco or fzf. Load the following function.
 
 Since boco is a shell function, it can be read directly from a local file to the ssh connection destination.
 
-    ssh -t user@hostname 'bash --rcfile <(echo '$(cat /path/to/boco/sh_function_boco|base64)'|base64 -d)'
-
+    ssh -t user@hostname 'bash --rcfile <(echo '$(cat /path/to/boco/boco.bash|base64)'|base64 -d)'
