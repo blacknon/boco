@@ -42,16 +42,16 @@ boco() {
   local GREP_CLEAR=$'\E[m\E[K'
 
   # local use variables
-  local input # input key code
-  local tmp # input key code(2nd)
-  local data # Get stdin or file data
-  local array # data to Array(Original)
-  local view_array # data to Array(Refine data)
+  local input           # input key code
+  local tmp             # input key code(2nd)
+  local data            # Get stdin or file data
+  local array           # data to Array(Original)
+  local view_array      # data to Array(Refine data)
   local now_cursor_line # Now cursor position in terminal(line)
-  local now_list_line # now cursor line (in boco list)
-  local selected_line # now selected line (in boco list. array)
-  local max_line # VIEW_ARRAY_max_line
-  local view_max_line # max line in terminal
+  local now_list_line   # now cursor line (in boco list)
+  local selected_line   # now selected line (in boco list. array)
+  local max_line        # VIEW_ARRAY_max_line
+  local view_max_line   # max line in terminal
   local scroll_position # boco list scroll position (1st line)
   local surplus_line
 
@@ -75,12 +75,14 @@ boco() {
     return 1
   }
 
-  while getopts :pq: OPT
-  do
+  while getopts :pq: OPT; do
     case ${OPT} in
-      p ) flg_p="TRUE" ;;
-      q ) search_word="${OPTARG}";;
-      :|\?) __boco_usage;return 1;;
+    p) flg_p="TRUE" ;;
+    q) search_word="${OPTARG}" ;;
+    : | \?)
+      __boco_usage
+      return 1
+      ;;
     esac
   done
   shift $((OPTIND - 1))
@@ -90,8 +92,14 @@ boco() {
   ## ----------
   # set shopt(get windows size.)
   case "${SHELL##*/}" in
-    bash*) shopt -s checkwinsize; (:;:) ;;
-    zsh*)  setopt localoptions ksharrays ;;
+  bash*)
+    shopt -s checkwinsize
+    (
+      :
+      :
+    )
+    ;;
+  zsh*) setopt localoptions ksharrays ;;
   esac
 
   ## ----------
@@ -106,16 +114,16 @@ boco() {
     local cursor
 
     # move tty
-    exec < /dev/tty
+    exec </dev/tty
     old_stty=$(stty -g)
     stty raw -echo min 0
 
     # get position data
-    printf "${CURSOR_GET}" > /dev/tty
+    printf "${CURSOR_GET}" >/dev/tty
 
     case "${SHELL##*/}" in
-      bash*) IFS=';' read -r -d R -a cursor ;;
-      zsh*)  IFS=';' read -s -d R cursor ;;
+    bash*) IFS=';' read -r -d R -a cursor ;;
+    zsh*) IFS=';' read -s -d R cursor ;;
     esac
 
     IFS=$'\n'
@@ -149,7 +157,7 @@ boco() {
     printf "\e["${print_line}";0H" >&2
 
     # print line
-    if [[ ${cursor_line_type} -eq 0 ]];then
+    if [[ ${cursor_line_type} -eq 0 ]]; then
       print_data="${print_data//$(echo ${GREP_CLEAR})/$(echo ${GREP_CLEAR}${COLOR_YELLOW}${COLOR_BACK_BLUE})}"
       printf "${COLOR_YELLOW}${COLOR_BACK_BLUE}"'%s'"${COLOR_NONE}\n" "${print_data}" >&2
 
@@ -183,12 +191,11 @@ boco() {
     list_range_max=$((${scroll_position} + ${view_max_line}))
 
     local x=0
-    for ((i=${scroll_position};i<${list_range_max};i++));
-    do
+    for ((i = ${scroll_position}; i < ${list_range_max}; i++)); do
       # テキストを変数に代入
       list_line="${view_array_data[${i}]}"
 
-      if [[ ${now_list_line} -eq ${i} ]];then
+      if [[ ${now_list_line} -eq ${i} ]]; then
         # print now select line
         __print_line_position $((${x} + 1)) 0 "${list_line}"
       elif [[ $(__selected_check_in ${list_line%%:*}) -eq 0 ]]; then
@@ -198,7 +205,7 @@ boco() {
         # print other line
         __print_line_position $((${x} + 1)) 2 "${list_line}"
       fi
-      x=$((${x} + 1 ))
+      x=$((${x} + 1))
     done
 
     # cursor move to header
@@ -214,8 +221,7 @@ boco() {
     # clear line
     echo $'\e[2K'$'\e[1A' >&2
 
-    for ((i=0;i<${view_max_line};i++));
-    do
+    for ((i = 0; i < ${view_max_line}; i++)); do
       # move cursor 1 down
       echo $'\e[1B' >&2
 
@@ -231,8 +237,14 @@ boco() {
   #     update view array data.
   __update_view_array() {
     case "${SHELL##*/}" in
-      bash*) shopt -s checkwinsize; (:;:) ;;
-      zsh*)  setopt localoptions ksharrays ;;
+    bash*)
+      shopt -s checkwinsize
+      (
+        :
+        :
+      )
+      ;;
+    zsh*) setopt localoptions ksharrays ;;
     esac
     local search_word_count
     local array_str
@@ -245,14 +257,17 @@ boco() {
 
     # clear view_array_data
     view_array_data=()
-    array_str="$(IFS=$'\n';echo "${array_data[*]}")"
+    array_str="$(
+      IFS=$'\n'
+      echo "${array_data[*]}"
+    )"
 
     # grep data
-    if [[ ${search_word_count} -gt 0 ]];then
+    if [[ ${search_word_count} -gt 0 ]]; then
       # split string at space
       case "${SHELL##*/}" in
-        bash*) IFS=" " read -r -a search_word_array <<< "${search_word}" ;;
-        zsh*)  IFS=" " read -r -A search_word_array <<< "${search_word}" ;;
+      bash*) IFS=" " read -r -a search_word_array <<<"${search_word}" ;;
+      zsh*) IFS=" " read -r -A search_word_array <<<"${search_word}" ;;
       esac
 
       IFS=$'\n'
@@ -260,7 +275,7 @@ boco() {
 
       for_count=0
       for word in ${search_word_array[*]}; do
-        if [[ ${for_count} -eq 0 ]];then
+        if [[ ${for_count} -eq 0 ]]; then
           # with number
           view_array_str="$(echo "${view_array_str}" | GREP_COLORS='ln=:se=' \grep -a -F -n --color=always -i -- ${word})"
         else
@@ -295,29 +310,29 @@ boco() {
     # 出力行数(20で固定)
     surplus_line=20
 
-    if [[ ${surplus_line} -le ${view_max_line} ]];then
+    if [[ ${surplus_line} -le ${view_max_line} ]]; then
       view_max_line="${surplus_line}"
     fi
 
-    if [[ $((${terminal_lines} - ${view_max_line})) -le ${now_cursor_line} ]];then
+    if [[ $((${terminal_lines} - ${view_max_line})) -le ${now_cursor_line} ]]; then
       now_cursor_line=$((${terminal_lines} - ${view_max_line}))
     fi
 
-    if [[ ${max_line} -le ${scroll_position} ]];then
+    if [[ ${max_line} -le ${scroll_position} ]]; then
       scroll_position=$((${max_line} - 1))
 
-      if [[ ${scroll_position} -lt 0 ]];then
+      if [[ ${scroll_position} -lt 0 ]]; then
         scroll_position=0
       fi
     fi
 
-    if [[ ${now_list_line} -ge $((${view_max_line})) ]];then
+    if [[ ${now_list_line} -ge $((${view_max_line})) ]]; then
       now_list_line=$((${view_max_line} - 1))
     fi
 
-    for ((i=0;i<${view_max_line};i++)) {
+    for ((i = 0; i < ${view_max_line}; i++)); do
       echo "" >&2
-    }
+    done
 
     printf "\e[${now_cursor_line};0H" >&2
   }
@@ -325,18 +340,18 @@ boco() {
   # @brief: scroll up function
   __scroll_up() {
     now_list_line=$((${now_list_line} - 1))
-    if [[ ${now_list_line} -lt 0 ]];then
+    if [[ ${now_list_line} -lt 0 ]]; then
       now_list_line=0
       return
     fi
 
     # scroll up
     list_range_min=${scroll_position}
-    if [[ ${now_list_line} -lt ${list_range_min} ]];then
+    if [[ ${now_list_line} -lt ${list_range_min} ]]; then
       # if scroll up
       scroll_position=$((${scroll_position} - 1))
 
-      if [[ ${scroll_position} -lt 0 ]];then
+      if [[ ${scroll_position} -lt 0 ]]; then
         scroll_position=0
       fi
 
@@ -356,7 +371,7 @@ boco() {
 
       # unselect line
       unselect_line="${view_array_data[$((${now_list_line} + 1))]}"
-      if [[ $(__selected_check_in ${unselect_line%%:*}) -eq 0 ]];then
+      if [[ $(__selected_check_in ${unselect_line%%:*}) -eq 0 ]]; then
         __print_line_position $((${term_line} + 2)) 1 "${view_array_data[$((${now_list_line} + 1))]}"
       else
         __print_line_position $((${term_line} + 2)) 2 "${view_array_data[$((${now_list_line} + 1))]}"
@@ -373,14 +388,14 @@ boco() {
   # @brief: scroll down function
   __scroll_down() {
     now_list_line=$((${now_list_line} + 1))
-    if [[ ${now_list_line} -gt $((${max_line} - 1)) ]];then
+    if [[ ${now_list_line} -gt $((${max_line} - 1)) ]]; then
       now_list_line=$((${max_line} - 1))
       return
     fi
 
     # scroll down
     local list_range_max=$((${scroll_position} + ${view_max_line}))
-    if [[ ${now_list_line} -ge ${list_range_max} ]];then
+    if [[ ${now_list_line} -ge ${list_range_max} ]]; then
       # if scroll down
       scroll_position=$((${scroll_position} + 1))
       __clear_print_data
@@ -398,7 +413,7 @@ boco() {
       unselect_line="${view_array_data[$((${now_list_line} - 1))]}"
 
       # unselect line
-      if [[ $(__selected_check_in ${unselect_line%%:*}) -eq 0 ]];then
+      if [[ $(__selected_check_in ${unselect_line%%:*}) -eq 0 ]]; then
         __print_line_position ${term_line} 1 "${view_array_data[$((${now_list_line} - 1))]}"
       else
         __print_line_position ${term_line} 2 "${view_array_data[$((${now_list_line} - 1))]}"
@@ -423,7 +438,7 @@ boco() {
   #     check if number is included in array
   __selected_check_in() {
     for e in ${selected_line[@]}; do
-      if [[ ${e} -eq ${1} ]];then
+      if [[ ${e} -eq ${1} ]]; then
         echo 0
         return
       fi
@@ -441,14 +456,13 @@ boco() {
   __selected_del() {
     local new_selected_line=()
     for e in ${selected_line[@]}; do
-      if [[ ! ${e} -eq ${1} ]];then
+      if [[ ! ${e} -eq ${1} ]]; then
         new_selected_line=(${new_selected_line[@]} ${e})
       fi
     done
 
     selected_line=(${new_selected_line[@]})
   }
-
 
   ## ----------
   # main
@@ -457,12 +471,12 @@ boco() {
   trap '__trap_2;trap - 2;return 1;' 2
 
   # check -p option
-  if [[ "${flg_p}" != "TRUE" ]];then
+  if [[ "${flg_p}" != "TRUE" ]]; then
     printf '\033[?7l'
   fi
 
   # get data from stdin or file.
-  if [ -p /dev/stdin ];then
+  if [ -p /dev/stdin ]; then
     data="$(</dev/stdin)"
   else
     data="$(<$@)"
@@ -496,84 +510,83 @@ boco() {
 
   # get input key loop
   local IFS=$'\n'
-  while true
-  do
+  while true; do
     # get input key
     case "${SHELL##*/}" in
-      bash*) read -rsn1 input </dev/tty ;;
-      zsh*)  read -r -s -k 1 input </dev/tty ;;
+    bash*) read -rsn1 input </dev/tty ;;
+    zsh*) read -r -s -k 1 input </dev/tty ;;
     esac
 
     case "${input}" in
-      # hundling Escape(\x1B)
-      $'\x1B')
+    # hundling Escape(\x1B)
+    $'\x1B')
+      case "${SHELL##*/}" in
+      bash*) read -rsn1 -t 0.1 tmp </dev/tty ;;
+      zsh*) read -r -s -k 1 -t 0.1 tmp </dev/tty ;;
+      esac
+
+      if [[ "${tmp}" == "[" ]]; then
         case "${SHELL##*/}" in
-          bash*) read -rsn1 -t 0.1 tmp </dev/tty ;;
-          zsh*)  read -r -s -k 1 -t 0.1 tmp </dev/tty ;;
+        bash*) read -rsn1 -t 0.1 tmp </dev/tty ;;
+        zsh*) read -r -s -k 1 -t 0.1 tmp </dev/tty ;;
         esac
 
-        if [[ "${tmp}" == "[" ]]; then
-          case "${SHELL##*/}" in
-            bash*) read -rsn1 -t 0.1 tmp </dev/tty ;;
-            zsh*)  read -r -s -k 1 -t 0.1 tmp </dev/tty ;;
-          esac
-
-          case "${tmp}" in
-            # up key
-            "A") __scroll_up ;;
-            # down key
-            "B") __scroll_down ;;
-          esac
-        fi
-
-        # Flush "stdin" with 0.1  sec timeout.
-        case "${SHELL##*/}" in
-          bash*) read -r -n 5 -t 0.1 ;;
-          zsh*)  read -r -k 5 -t 0.1 ;;
+        case "${tmp}" in
+        # up key
+        "A") __scroll_up ;;
+          # down key
+        "B") __scroll_down ;;
         esac
+      fi
 
-        ;;
+      # Flush "stdin" with 0.1  sec timeout.
+      case "${SHELL##*/}" in
+      bash*) read -r -n 5 -t 0.1 ;;
+      zsh*) read -r -k 5 -t 0.1 ;;
+      esac
+
+      ;;
 
       # Delete(Backspace(\x7F)) key
-      $'\x7F')
-        # get search word count
-        local search_word_count=${#search_word}
+    $'\x7F')
+      # get search word count
+      local search_word_count=${#search_word}
 
-        # 検索ワードの文字数が0より大きい場合、文字を削除して表示を更新する
-        if [[ ${search_word_count} -gt 0 ]];then
-          local search_word_count=$((${search_word_count} - 1))
-          local search_word=${search_word:0:${search_word_count}}
+      # 検索ワードの文字数が0より大きい場合、文字を削除して表示を更新する
+      if [[ ${search_word_count} -gt 0 ]]; then
+        local search_word_count=$((${search_word_count} - 1))
+        local search_word=${search_word:0:${search_word_count}}
 
-          __update_view_array
-          __clear_print_data
-          __update_max_line
-          __print_data
-        fi
-        ;;
-
-      # input Space Key
-      " ")
-        search_word=${search_word}${input}
         __update_view_array
         __clear_print_data
         __update_max_line
         __print_data
-        ;;
+      fi
+      ;;
+
+      # input Space Key
+    " ")
+      search_word=${search_word}${input}
+      __update_view_array
+      __clear_print_data
+      __update_max_line
+      __print_data
+      ;;
 
       # input Tab key(\x09)
       # Toggle multi select.
-      $'\x09')
-        # add selected line
-        local line="${view_array_data[${now_list_line}]}"
-        if [[ $(__selected_check_in ${line%%:*} ) -eq 0 ]];then
-          __selected_del ${line%%:*}
-        else
-          __selected_add ${line%%:*}
-        fi
-        __clear_print_data
-        __update_max_line
-        __print_data
-        ;;
+    $'\x09')
+      # add selected line
+      local line="${view_array_data[${now_list_line}]}"
+      if [[ $(__selected_check_in ${line%%:*}) -eq 0 ]]; then
+        __selected_del ${line%%:*}
+      else
+        __selected_add ${line%%:*}
+      fi
+      __clear_print_data
+      __update_max_line
+      __print_data
+      ;;
 
       # input Ctrl + A key
       # Selected all view lines.
@@ -587,36 +600,35 @@ boco() {
       #   ;;
 
       # input Enter key
-      ""|$'\n')
-        __clear_print_data
-        local new_selected_line
+    "" | $'\n')
+      __clear_print_data
+      local new_selected_line
 
-        if [[ ${#selected_line} -eq 0 ]];then
-          local line="${view_array_data[${now_list_line}]}"
-          selected_line=(${line%%:*})
-        fi
+      if [[ ${#selected_line} -eq 0 ]]; then
+        local line="${view_array_data[${now_list_line}]}"
+        selected_line=(${line%%:*})
+      fi
 
-        IFS=$'\n' new_selected_line=($(sort -n <<<"${selected_line[*]}"))
-        for NO in ${new_selected_line[@]};
-        do
-          echo "${array_data[$((${NO} - 1))]}"
-        done
-        break
-        ;;
+      IFS=$'\n' new_selected_line=($(sort -n <<<"${selected_line[*]}"))
+      for NO in ${new_selected_line[@]}; do
+        echo "${array_data[$((${NO} - 1))]}"
+      done
+      break
+      ;;
 
-      # other key
-      *)
-        search_word=${search_word}${input}
-        __update_view_array
-        __clear_print_data
-        __update_max_line
-        __print_data
-        ;;
+    # other key
+    *)
+      search_word=${search_word}${input}
+      __update_view_array
+      __clear_print_data
+      __update_max_line
+      __print_data
+      ;;
     esac
   done
 
   # check -p option
-  if [[ "${flg_p}" != "TRUE" ]];then
+  if [[ "${flg_p}" != "TRUE" ]]; then
     printf '\033[?7h'
   fi
 
