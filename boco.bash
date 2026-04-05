@@ -43,8 +43,6 @@ boco() {
 
   # ANSI Escape(Other)
   local -r CURSOR_GET=$'\E[6n'
-  local GREP_CLEAR=$'\E[m\E[K'
-
   # local use variables
   local input           # input key code
   local tmp             # input key code(2nd)
@@ -66,16 +64,18 @@ boco() {
   # env
   local -r OLD_IFS=${IFS}
 
-  # cmd
-  local cmd_grep
+  local use_perf_mode
+  local rendered_line_count=0
+  local prev_search_word
+  local prev_search_word_lower_array=()
 
   ## ----------
   # getopts
   ## ----------
   __boco_usage() {
-    echo "usage:"
-    echo " -p               ... not print control character"
-    echo " -q {search_word} ... search word"
+    printf '%s\n' "usage:"
+    printf '%s\n' " -p               ... not print control character"
+    printf '%s\n' " -q {search_word} ... search word"
     return 1
   }
 
@@ -98,13 +98,22 @@ boco() {
   case "${SHELL##*/}" in
   bash*)
     shopt -s checkwinsize
+    shopt -s nocasematch
     (
       :
       :
     )
     ;;
-  zsh*) setopt localoptions ksharrays ;;
+  zsh*) setopt localoptions ksharrays nocasematch ;;
   esac
+
+  if [[ -n "${BOCO_PERFORMANCE_MODE}" ]]; then
+    use_perf_mode="${BOCO_PERFORMANCE_MODE}"
+  elif [[ -n "${SSH_CONNECTION}" || -n "${SSH_CLIENT}" || -n "${SSH_TTY}" ]]; then
+    use_perf_mode=1
+  else
+    use_perf_mode=0
+  fi
 
   ## ----------
   # function
@@ -162,11 +171,9 @@ boco() {
 
     # print line
     if [[ ${cursor_line_type} -eq 0 ]]; then
-      print_data="${print_data//$(echo ${GREP_CLEAR})/$(echo ${GREP_CLEAR}${COLOR_YELLOW}${COLOR_BACK_BLUE})}"
       printf "${COLOR_YELLOW}${COLOR_BACK_BLUE}"'%s'"${COLOR_NONE}\n" "${print_data}" >&2
 
     elif [[ ${cursor_line_type} -eq 1 ]]; then
-      print_data="${print_data//$(echo ${GREP_CLEAR})/$(echo ${GREP_CLEAR}${COLOR_YELLOW}${COLOR_BACK_GREEN})}"
       printf "${COLOR_YELLOW}${COLOR_BACK_GREEN}"'%s'"${COLOR_NONE}\n" "${print_data}" >&2
     else
       printf "%s\n" "${print_data}" >&2
@@ -180,121 +187,185 @@ boco() {
     local header_text
     local header_text_count
     local list_range_max
-    local list_range_min
-    local list_text
+    local list_line
+    local print_data
+    local cursor_line_type
+    local output
+    local clear_count
 
     # move cursor
-    printf "\e[${now_cursor_line};0H" >&2
-
-    # print header
     header_text="QUERY: ${search_word} "
     header_text_count=${#header_text}
-    printf "${header_text}\n" >&2
+    output=$'\e['"${now_cursor_line}"';0H'
+    output+=$'\e[2K'"${header_text}"$'\n'
 
     # print line
     list_range_max=$((${scroll_position} + ${view_max_line}))
 
     local x=0
     for ((i = ${scroll_position}; i < ${list_range_max}; i++)); do
-      # テキストを変数に代入
       list_line="${view_array_data[${i}]}"
+      print_data=${list_line#*:}
 
       if [[ ${now_list_line} -eq ${i} ]]; then
-        # print now select line
-        __print_line_position $((${x} + 1)) 0 "${list_line}"
-      elif [[ $(__selected_check_in ${list_line%%:*}) -eq 0 ]]; then
-        # print selected line
-        __print_line_position $((${x} + 1)) 1 "${list_line}"
+        cursor_line_type=0
+      elif __selected_check_in "${list_line%%:*}"; then
+        cursor_line_type=1
       else
-        # print other line
-        __print_line_position $((${x} + 1)) 2 "${list_line}"
+        cursor_line_type=2
       fi
+
+      output+=$'\e[2K'
+      if [[ ${cursor_line_type} -eq 0 ]]; then
+        output+="${COLOR_YELLOW}${COLOR_BACK_BLUE}${print_data}${COLOR_NONE}"
+      elif [[ ${cursor_line_type} -eq 1 ]]; then
+        output+="${COLOR_YELLOW}${COLOR_BACK_GREEN}${print_data}${COLOR_NONE}"
+      else
+        output+="${print_data}"
+      fi
+      output+=$'\n'
       x=$((${x} + 1))
     done
 
+    clear_count=$((${rendered_line_count} - ${view_max_line}))
+    for ((i = 0; i < ${clear_count}; i++)); do
+      output+=$'\e[2K\n'
+    done
+
     # cursor move to header
-    printf "\e[${now_cursor_line};${header_text_count}H" >&2
+    output+=$'\e['"${now_cursor_line}"';'"${header_text_count}"'H'
+    printf '%s' "${output}" >&2
+    rendered_line_count=${view_max_line}
+  }
+
+  # @brief:
+  #     escape glob pattern chars for fixed-string matching.
+  __escape_glob() {
+    local escaped=${1//\\/\\\\}
+    escaped=${escaped//\*/\\*}
+    escaped=${escaped//\?/\\?}
+    escaped=${escaped//\[/\\[}
+    escaped=${escaped//\]/\\]}
+    printf '%s' "${escaped}"
+  }
+
+  # @brief:
+  #     convert input string to lower case.
+  __to_lower() {
+    case "${SHELL##*/}" in
+    bash*) printf '%s' "${1,,}" ;;
+    zsh*) printf '%s' "${1:l}" ;;
+    *) printf '%s' "${1}" ;;
+    esac
   }
 
   # @brief:
   #     clear printed data
   __clear_print_data() {
+    local output
+
     # move cursor
-    printf "\e[${now_cursor_line};0H" >&2
+    output=$'\e['"${now_cursor_line}"';0H'
+    output+=$'\e[2K'
 
-    # clear line
-    echo $'\e[2K'$'\e[1A' >&2
-
-    for ((i = 0; i < ${view_max_line}; i++)); do
-      # move cursor 1 down
-      echo $'\e[1B' >&2
-
-      # clear line
-      echo $'\e[1A'$'\e[1G'$'\e[2K'$'\e[1A' >&2
+    for ((i = 0; i < ${rendered_line_count}; i++)); do
+      output+=$'\e[1B\e[2K'
     done
 
     # move cursor
-    printf "\e[${now_cursor_line};0H" >&2
+    output+=$'\e['"${now_cursor_line}"';0H'
+    printf '%s' "${output}" >&2
+    rendered_line_count=0
   }
 
   # @brief:
   #     update view array data.
   __update_view_array() {
-    case "${SHELL##*/}" in
-    bash*)
-      shopt -s checkwinsize
-      (
-        :
-        :
-      )
-      ;;
-    zsh*) setopt localoptions ksharrays ;;
-    esac
-    local search_word_count
-    local array_str
-    local view_array_str
-    local search_word_array
-    local for_count
+    local line
+    local line_no
+    local source_line_no
+    local source_indices
+    local prev_view_array_index_data
+    local lower_search_word
+    local search_word_lower_array
+    local search_word_pattern_array
+    local matched
+    local word
+    local idx
+    local start_index=0
+    local can_refine_from_prev=0
 
-    local IFS=$'\n'
-    search_word_count=${#search_word}
+    prev_view_array_index_data=("${view_array_index_data[@]}")
 
     # clear view_array_data
     view_array_data=()
-    array_str="$(
-      IFS=$'\n'
-      echo "${array_data[*]}"
-    )"
+    view_array_index_data=()
 
-    # grep data
-    if [[ ${search_word_count} -gt 0 ]]; then
-      # split string at space
+    lower_search_word=$(__to_lower "${search_word}")
+
+    if [[ -n "${search_word}" ]]; then
       case "${SHELL##*/}" in
-      bash*) IFS=" " read -r -a search_word_array <<<"${search_word}" ;;
-      zsh*) IFS=" " read -r -A search_word_array <<<"${search_word}" ;;
+      bash*) IFS=" " read -r -a search_word_lower_array <<<"${lower_search_word}" ;;
+      zsh*) IFS=" " read -r -A search_word_lower_array <<<"${lower_search_word}" ;;
       esac
-
-      IFS=$'\n'
-      view_array_str="${array_str}"
-
-      for_count=0
-      for word in ${search_word_array[*]}; do
-        if [[ ${for_count} -eq 0 ]]; then
-          # with number
-          view_array_str="$(echo "${view_array_str}" | GREP_COLORS='ln=:se=' \grep -a -F -n --color=always -i -- ${word})"
-        else
-          # without number
-          view_array_str="$(echo "${view_array_str}" | GREP_COLORS='ln=:se=' \grep -a -F --color=always -i -- ${word})"
-        fi
-        for_count=$((for_count + 1))
-      done
     else
-      # use regex
-      view_array_str="$(echo "${array_str}" | GREP_COLORS='ln=:se=' \grep -a -n -E '.*')"
+      search_word_lower_array=()
     fi
 
-    # set view_array_data
-    view_array_data=($(echo "${view_array_str}"))
+    for word in "${search_word_lower_array[@]}"; do
+      [[ -z "${word}" ]] && continue
+      search_word_pattern_array+=("$(__escape_glob "${word}")")
+    done
+
+    if [[ -n "${prev_search_word}" && -n "${search_word}" && "${search_word}" == "${prev_search_word}"* ]]; then
+      if [[ ${#search_word_pattern_array[@]} -eq ${#prev_search_word_lower_array[@]} && ${#search_word_pattern_array[@]} -gt 0 ]]; then
+        can_refine_from_prev=1
+
+        for ((idx = 0; idx < ${#prev_search_word_lower_array[@]} - 1; idx++)); do
+          if [[ "${search_word_lower_array[${idx}]}" != "${prev_search_word_lower_array[${idx}]}" ]]; then
+            can_refine_from_prev=0
+            break
+          fi
+        done
+
+        if [[ ${can_refine_from_prev} -eq 1 ]]; then
+          idx=$((${#search_word_pattern_array[@]} - 1))
+          if [[ "${search_word_lower_array[${idx}]}" == "${prev_search_word_lower_array[${idx}]}"* ]]; then
+            start_index=${idx}
+            source_indices=("${prev_view_array_index_data[@]}")
+          else
+            can_refine_from_prev=0
+          fi
+        fi
+      fi
+
+      if [[ ${can_refine_from_prev} -eq 0 ]]; then
+        source_indices=("${prev_view_array_index_data[@]}")
+      fi
+    else
+      source_indices=("${array_index_data[@]}")
+    fi
+
+    for source_line_no in "${source_indices[@]}"; do
+      line_no=${source_line_no}
+      line="${array_data[${line_no}]}"
+      matched=1
+
+      for ((idx = ${start_index}; idx < ${#search_word_pattern_array[@]}; idx++)); do
+        if [[ "${array_data_lower[${line_no}]}" != *"${search_word_pattern_array[${idx}]}"* ]]; then
+          matched=0
+          break
+        fi
+      done
+
+      if [[ ${matched} -eq 1 ]]; then
+        view_array_data+=("$((line_no + 1)):${line}")
+        view_array_index_data+=("${line_no}")
+      fi
+    done
+
+    prev_search_word=${search_word}
+    prev_search_word_lower_array=("${search_word_lower_array[@]}")
     local IFS=${OLD_IFS}
   }
 
@@ -311,8 +382,12 @@ boco() {
     #   surplus_line=$((${terminal_lines} / 2))
     # fi
 
-    # 出力行数(20で固定)
-    surplus_line=20
+    # 出力行数
+    if [[ "${use_perf_mode}" == "1" ]]; then
+      surplus_line=12
+    else
+      surplus_line=20
+    fi
 
     if [[ ${surplus_line} -le ${view_max_line} ]]; then
       view_max_line="${surplus_line}"
@@ -334,11 +409,13 @@ boco() {
       now_list_line=$((${view_max_line} - 1))
     fi
 
-    for ((i = 0; i < ${view_max_line}; i++)); do
-      echo "" >&2
-    done
+    if [[ ${rendered_line_count} -eq 0 ]]; then
+      for ((i = 0; i < ${view_max_line}; i++)); do
+        printf "\n" >&2
+      done
 
-    printf "\e[${now_cursor_line};0H" >&2
+      printf "\e[${now_cursor_line};0H" >&2
+    fi
   }
 
   # @brief: scroll up function
@@ -375,7 +452,7 @@ boco() {
 
       # unselect line
       unselect_line="${view_array_data[$((${now_list_line} + 1))]}"
-      if [[ $(__selected_check_in ${unselect_line%%:*}) -eq 0 ]]; then
+      if __selected_check_in "${unselect_line%%:*}"; then
         __print_line_position $((${term_line} + 2)) 1 "${view_array_data[$((${now_list_line} + 1))]}"
       else
         __print_line_position $((${term_line} + 2)) 2 "${view_array_data[$((${now_list_line} + 1))]}"
@@ -417,7 +494,7 @@ boco() {
       unselect_line="${view_array_data[$((${now_list_line} - 1))]}"
 
       # unselect line
-      if [[ $(__selected_check_in ${unselect_line%%:*}) -eq 0 ]]; then
+      if __selected_check_in "${unselect_line%%:*}"; then
         __print_line_position ${term_line} 1 "${view_array_data[$((${now_list_line} - 1))]}"
       else
         __print_line_position ${term_line} 2 "${view_array_data[$((${now_list_line} - 1))]}"
@@ -443,12 +520,11 @@ boco() {
   __selected_check_in() {
     for e in ${selected_line[@]}; do
       if [[ ${e} -eq ${1} ]]; then
-        echo 0
-        return
+        return 0
       fi
     done
 
-    echo 1
+    return 1
   }
 
   # @brief: Add element to selected_line
@@ -466,6 +542,33 @@ boco() {
     done
 
     selected_line=(${new_selected_line[@]})
+  }
+
+  # @brief:
+  #     sort selected_line numerically with shell builtins.
+  __selected_sort() {
+    local sorted=()
+    local value
+    local i
+    local inserted
+
+    for value in "${selected_line[@]}"; do
+      inserted=0
+
+      for ((i = 0; i < ${#sorted[@]}; i++)); do
+        if [[ ${value} -lt ${sorted[${i}]} ]]; then
+          sorted=("${sorted[@]:0:${i}}" "${value}" "${sorted[@]:${i}}")
+          inserted=1
+          break
+        fi
+      done
+
+      if [[ ${inserted} -eq 0 ]]; then
+        sorted+=("${value}")
+      fi
+    done
+
+    selected_line=("${sorted[@]}")
   }
 
   ## ----------
@@ -488,8 +591,19 @@ boco() {
 
   # data to Array
   local IFS=$'\n'
-  local array_data=($(echo "${data}"))
+  local array_data=(${data})
+  local array_data_lower=()
+  local array_index_data=()
+  local view_array_index_data=()
   local IFS=${OLD_IFS}
+
+  for i in "${!array_data[@]}"; do
+    array_index_data+=("${i}")
+    array_data_lower+=("$(__to_lower "${array_data[${i}]}")")
+  done
+
+  prev_search_word=
+  prev_search_word_lower_array=()
 
   # get cursor positon
   __get_cursor_position
@@ -562,7 +676,6 @@ boco() {
         local search_word=${search_word:0:${search_word_count}}
 
         __update_view_array
-        __clear_print_data
         __update_max_line
         __print_data
       fi
@@ -572,7 +685,6 @@ boco() {
     " ")
       search_word=${search_word}${input}
       __update_view_array
-      __clear_print_data
       __update_max_line
       __print_data
       ;;
@@ -582,7 +694,7 @@ boco() {
     $'\x09')
       # add selected line
       local line="${view_array_data[${now_list_line}]}"
-      if [[ $(__selected_check_in ${line%%:*}) -eq 0 ]]; then
+      if __selected_check_in "${line%%:*}"; then
         __selected_del ${line%%:*}
       else
         __selected_add ${line%%:*}
@@ -613,9 +725,10 @@ boco() {
         selected_line=(${line%%:*})
       fi
 
-      IFS=$'\n' new_selected_line=($(sort -n <<<"${selected_line[*]}"))
-      for NO in ${new_selected_line[@]}; do
-        echo "${array_data[$((${NO} - 1))]}"
+      __selected_sort
+      new_selected_line=("${selected_line[@]}")
+      for NO in "${new_selected_line[@]}"; do
+        printf '%s\n' "${array_data[$((${NO} - 1))]}"
       done
       break
       ;;
@@ -624,7 +737,6 @@ boco() {
     *)
       search_word=${search_word}${input}
       __update_view_array
-      __clear_print_data
       __update_max_line
       __print_data
       ;;
@@ -637,4 +749,57 @@ boco() {
   fi
 
   local IFS=${OLD_IFS}
+}
+
+# @brief:
+#     history selector for Ctrl-R.
+#     Uses shell builtins as much as possible to reduce remote latency.
+boco_history_select() {
+  local current_buffer
+  local selected
+  local line
+  local history_lines=()
+
+  case "${SHELL##*/}" in
+  zsh*) setopt localoptions ksharrays ;;
+  esac
+
+  case "${SHELL##*/}" in
+  bash*)
+    local -A seen=()
+    current_buffer=${READLINE_LINE}
+    ;;
+  zsh*)
+    typeset -A seen
+    current_buffer=${BUFFER}
+    ;;
+  *)
+    current_buffer=
+    ;;
+  esac
+
+  while IFS= read -r line; do
+    [[ -z "${line}" ]] && continue
+    [[ -n "${seen["${line}"]}" ]] && continue
+    seen["${line}"]=1
+    history_lines+=("${line}")
+  done < <(builtin fc -lnr 1)
+
+  if [[ ${#history_lines[@]} -eq 0 ]]; then
+    return 0
+  fi
+
+  selected=$(printf '%s\n' "${history_lines[@]}" | boco -p -q "${current_buffer}")
+
+  case "${SHELL##*/}" in
+  bash*)
+    READLINE_LINE=${selected}
+    READLINE_POINT=${#READLINE_LINE}
+    ;;
+  zsh*)
+    BUFFER=${selected}
+    CURSOR=${#BUFFER}
+    zle redisplay 2>/dev/null
+    ;;
+  esac
 }
